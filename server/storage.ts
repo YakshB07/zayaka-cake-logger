@@ -7,7 +7,7 @@ import { UPLOADS_DIR } from './store.ts'
 
 const SUPABASE_URL = process.env.SUPABASE_URL
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY
-const BUCKET = process.env.SUPABASE_BUCKET ?? 'cake-photos'
+const BUCKET = encodeURIComponent(process.env.SUPABASE_BUCKET ?? 'cake-photos')
 
 const useSupabase = Boolean(SUPABASE_URL && SUPABASE_SERVICE_KEY)
 
@@ -31,6 +31,7 @@ export async function saveUploadedFiles(files: UploadedFile[]): Promise<string[]
         method: 'POST',
         headers: {
           Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+          apikey: SUPABASE_SERVICE_KEY!,
           'Content-Type': file.mimetype || 'application/octet-stream',
         },
         body: file.buffer,
@@ -56,7 +57,7 @@ export async function deleteUploadedFile(url: string): Promise<void> {
     if (!name) return
     await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET}/${name}`, {
       method: 'DELETE',
-      headers: { Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` },
+      headers: { Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`, apikey: SUPABASE_SERVICE_KEY! },
     }).catch(() => undefined)
     return
   }
