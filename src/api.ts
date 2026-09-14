@@ -25,10 +25,17 @@ export const api = {
 
   deleteOrder: (id: string) => req<{ ok: boolean }>(`/api/orders/${id}`, { method: 'DELETE' }),
 
-  uploadPhotos: (files: File[]) => {
-    const form = new FormData()
-    files.forEach((f) => form.append('photos', f))
-    return req<{ urls: string[] }>('/api/upload', { method: 'POST', body: form })
+  // Uploaded one at a time (not batched) so a single request never gets too
+  // big for the hosting platform's request-size limit.
+  uploadPhotos: async (files: File[]) => {
+    const urls: string[] = []
+    for (const f of files) {
+      const form = new FormData()
+      form.append('photos', f)
+      const { urls: u } = await req<{ urls: string[] }>('/api/upload', { method: 'POST', body: form })
+      urls.push(...u)
+    }
+    return { urls }
   },
 
   remindNow: (id: string) =>

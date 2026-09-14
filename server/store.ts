@@ -9,8 +9,12 @@ export const DATA_DIR = path.join(__dirname, 'data')
 export const UPLOADS_DIR = path.join(__dirname, 'uploads')
 const DB_FILE = path.join(DATA_DIR, 'orders.json')
 
-for (const dir of [DATA_DIR, UPLOADS_DIR]) {
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+// Vercel's filesystem is read-only outside /tmp, and unused there anyway
+// once DATABASE_URL + Supabase Storage are configured.
+if (!process.env.VERCEL) {
+  for (const dir of [DATA_DIR, UPLOADS_DIR]) {
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+  }
 }
 
 // ── Postgres backend (used when DATABASE_URL is set, e.g. on Render/Supabase) ──

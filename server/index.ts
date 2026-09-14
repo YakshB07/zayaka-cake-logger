@@ -25,7 +25,9 @@ app.use(express.json())
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 15 * 1024 * 1024, files: 6 },
+  // Kept comfortably under Vercel's ~4.5MB request-body cap. Photos are
+  // uploaded one at a time from the browser, so this is the per-photo limit.
+  limits: { fileSize: 4 * 1024 * 1024, files: 1 },
   fileFilter: (_req, file, cb) => cb(null, file.mimetype.startsWith('image/')),
 })
 
@@ -92,12 +94,20 @@ if (fs.existsSync(dist)) {
   app.get(/^\/(?!api|uploads).*/, (_req, res) => res.sendFile(path.join(dist, 'index.html')))
 }
 
-app.listen(PORT, () => {
-  console.log(`🎂 Zayaka Cake Logger API on http://localhost:${PORT}`)
-  console.log(`   Reminders go to: ${REMINDER_PHONES.join(', ')}`)
-  // daily at 9:00 AM bakery time, plus a catch-up check on startup
-  cron.schedule('0 9 * * *', () => void checkAndSendReminders(), {
-    timezone: process.env.TIMEZONE ?? 'America/Toronto',
+// On serverless (Vercel) there's no long-running process to `.listen()` on or
+// to hold a node-cron timer — the /api/cron/reminders endpoint (pinged by
+// GitHub Actions) handles reminders instead. Only start the classic server
+// loop when actually running as one (local dev, or a traditional host).
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`🎂 Zayaka Cake Logger API on http://localhost:${PORT}`)
+    console.log(`   Reminders go to: ${REMINDER_PHONES.join(', ')}`)
+    // daily at 9:00 AM bakery time, plus a catch-up check on startup
+    cron.schedule('0 9 * * *', () => void checkAndSendReminders(), {
+      timezone: process.env.TIMEZONE ?? 'America/Toronto',
+    })
+    void checkAndSendReminders()
   })
-  void checkAndSendReminders()
-})
+}
+
+export default app
