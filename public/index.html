@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Zayaka Cake Logger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Lora:ital@0;1&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="styles.css" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎂</text></svg>" />
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <div class="brand-mark">Z</div>
+      <div class="brand-text">
+        <h1>Zayaka <span>Bakes n' Bites</span></h1>
+        <p>Cake Order Logger</p>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn-ghost" id="btnReminders" title="Reminder settings">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        Reminders
+      </button>
+      <button class="btn-primary" id="btnNewOrder">+ New Cake Order</button>
+    </div>
+  </div>
+</header>
+
+<main class="container">
+  <section class="stats" id="statsRow"></section>
+
+  <section class="toolbar">
+    <div class="search-wrap">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input type="search" id="searchInput" placeholder="Search by name, flavour, phone…" />
+    </div>
+    <div class="tabs" id="filterTabs">
+      <button class="tab active" data-filter="upcoming">Upcoming</button>
+      <button class="tab" data-filter="picked-up">Picked Up</button>
+      <button class="tab" data-filter="all">All</button>
+    </div>
+  </section>
+
+  <section id="ordersList" class="orders-list"></section>
+</main>
+
+<!-- New / Edit Order Modal -->
+<div class="modal-backdrop" id="orderModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <h2 id="orderModalTitle">New Cake Order</h2>
+      <button class="btn-close" data-close>&times;</button>
+    </div>
+    <form id="orderForm" novalidate>
+      <div class="form-grid">
+
+        <fieldset>
+          <legend>Customer</legend>
+          <div class="field-row">
+            <label class="field">
+              <span>Customer name <em>*</em></span>
+              <input type="text" name="customerName" required placeholder="e.g. Priya S." autocomplete="off" />
+            </label>
+            <label class="field">
+              <span>Phone</span>
+              <input type="tel" name="customerPhone" placeholder="519-555-0123" autocomplete="off" />
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Cake</legend>
+          <div class="field">
+            <span class="field-label">Size <em>*</em></span>
+            <div class="chip-group" id="sizeChips"></div>
+          </div>
+          <div class="field-row">
+            <label class="field">
+              <span>Flavour <em>*</em></span>
+              <select name="flavour" required id="flavourSelect"></select>
+            </label>
+            <label class="field" id="customFlavourWrap" hidden>
+              <span>Custom flavour</span>
+              <input type="text" name="customFlavour" placeholder="Type the flavour…" />
+            </label>
+          </div>
+          <label class="field">
+            <span>Writing on cake</span>
+            <input type="text" name="cakeText" placeholder='e.g. "Happy Birthday Aarav"' />
+          </label>
+          <label class="field">
+            <span>Special design / notes</span>
+            <textarea name="designNotes" rows="2" placeholder="Theme, colours, toppers, allergies, tiers…"></textarea>
+          </label>
+          <div class="field">
+            <span class="field-label">Reference photo</span>
+            <div class="dropzone" id="dropzone">
+              <input type="file" id="imageInput" accept="image/*" hidden />
+              <div class="dz-idle" id="dzIdle">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+                <p><strong>Drop a picture here</strong> or click to browse<br /><small>You can also paste a screenshot (Ctrl+V)</small></p>
+              </div>
+              <div class="dz-preview" id="dzPreview" hidden>
+                <img id="dzImg" alt="Cake reference" />
+                <button type="button" class="dz-remove" id="dzRemove">Remove</button>
+              </div>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Dates &amp; Pickup</legend>
+          <div class="field-row three">
+            <label class="field">
+              <span>Order taken on</span>
+              <input type="date" name="orderDate" />
+            </label>
+            <label class="field">
+              <span>Pickup date <em>*</em></span>
+              <input type="date" name="pickupDate" required />
+            </label>
+            <label class="field">
+              <span>Pickup time</span>
+              <input type="time" name="pickupTime" />
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Payment</legend>
+          <div class="field-row three">
+            <label class="field">
+              <span>Price discussed ($)</span>
+              <input type="number" name="price" min="0" step="0.01" placeholder="0.00" inputmode="decimal" />
+            </label>
+            <label class="field">
+              <span>Pre-payment received ($)</span>
+              <input type="number" name="depositAmount" min="0" step="0.01" placeholder="0.00" inputmode="decimal" />
+            </label>
+            <div class="field balance-box">
+              <span>Balance due</span>
+              <strong id="balancePreview">$0.00</strong>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <span class="field-label">Pre-payment method</span>
+              <div class="chip-group" id="depositMethodChips">
+                <button type="button" class="chip" data-value="E-Transfer">E-Transfer</button>
+                <button type="button" class="chip" data-value="Cash">Cash</button>
+                <button type="button" class="chip" data-value="Card">Card</button>
+              </div>
+            </div>
+            <div class="field">
+              <span class="field-label">Balance to be paid by</span>
+              <div class="chip-group" id="balanceMethodChips">
+                <button type="button" class="chip" data-value="E-Transfer">E-Transfer</button>
+                <button type="button" class="chip" data-value="Cash">Cash</button>
+                <button type="button" class="chip" data-value="Card">Card</button>
+              </div>
+            </div>
+          </div>
+        </fieldset>
+
+      </div>
+      <div class="modal-foot">
+        <p class="form-error" id="formError" hidden></p>
+        <button type="button" class="btn-ghost" data-close>Cancel</button>
+        <button type="submit" class="btn-primary" id="btnSaveOrder">Save Order</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Order Detail Modal -->
+<div class="modal-backdrop" id="detailModal" hidden>
+  <div class="modal modal-detail" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <h2 id="detailTitle"></h2>
+      <button class="btn-close" data-close>&times;</button>
+    </div>
+    <div id="detailBody"></div>
+  </div>
+</div>
+
+<!-- Reminders Modal -->
+<div class="modal-backdrop" id="remindersModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <h2>SMS Reminders</h2>
+      <button class="btn-close" data-close>&times;</button>
+    </div>
+    <div class="reminders-body">
+      <p class="muted">Every morning, a text listing pickups for <strong>today, tomorrow and in 2 days</strong> is sent to these numbers:</p>
+      <div id="reminderNumbers" class="reminder-numbers"></div>
+      <div id="smsStatus"></div>
+      <div class="reminder-actions">
+        <button class="btn-primary" id="btnSendNow">Send reminder text now</button>
+      </div>
+      <h3 class="log-title">Recent reminders</h3>
+      <div id="reminderLog" class="reminder-log"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="app.js"></script>
+</body>
+</html>

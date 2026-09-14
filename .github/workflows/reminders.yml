@@ -1,0 +1,22 @@
+name: Send daily cake reminders
+
+# Render's free tier can put the app to sleep, so node-cron alone can't be
+# trusted to fire at 9am. This workflow pings the reminder endpoint instead —
+# it wakes the app up and triggers the check. Runs twice to cover Toronto's
+# EST/EDT switch (13:00 UTC = 9am EDT, 14:00 UTC = 9am EST); the endpoint
+# only sends a reminder once per order/stage, so the extra run is harmless.
+on:
+  schedule:
+    - cron: '0 13 * * *'
+    - cron: '0 14 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger reminder check
+        run: |
+          curl -sf -X POST "${{ vars.RENDER_URL }}/api/cron/reminders" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            --retry 5 --retry-delay 10 --retry-all-errors
