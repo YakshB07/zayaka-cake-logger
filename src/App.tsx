@@ -21,7 +21,6 @@ export default function App() {
   const [editing, setEditing] = useState<CakeOrder | null>(null)
   const [filter, setFilter] = useState<Filter>('upcoming')
   const [search, setSearch] = useState('')
-  const [smsConfigured, setSmsConfigured] = useState<boolean | null>(null)
   const [toast, setToast] = useState('')
 
   const refresh = useCallback(async () => {
@@ -34,7 +33,6 @@ export default function App() {
 
   useEffect(() => {
     void refresh()
-    api.config().then((c) => setSmsConfigured(c.smsConfigured)).catch(() => setSmsConfigured(null))
   }, [refresh])
 
   const showToast = (msg: string) => {
@@ -128,13 +126,6 @@ export default function App() {
       </header>
 
       <main className="main">
-        {smsConfigured === false && (
-          <div className="banner banner-warn">
-            Text reminders aren&rsquo;t connected yet — add your Twilio details in the <code>.env</code> file (see
-            README). Until then, reminders show here in the app only.
-          </div>
-        )}
-
         {dueSoon.length > 0 && (
           <section className="due-strip" aria-label="Cakes due soon">
             <h2 className="section-label">Coming up</h2>
