@@ -114,8 +114,8 @@ export function BusinessPage({ orders, onToast }: { orders: CakeOrder[]; onToast
   const be = useMemo(() => breakEven(orders, fin, range), [orders, fin, range])
   const costSlices = useMemo(() => categoryBreakdown(fin, range), [fin, range])
   const fixedSlices = useMemo(() => fixedCostBreakdown(fin, range), [fin, range])
-  const flavours = useMemo(() => flavourStats(orders, range), [orders, range])
-  const sizes = useMemo(() => sizeStats(orders, range), [orders, range])
+  const flavours = useMemo(() => flavourStats(orders, fin, range), [orders, fin, range])
+  const sizes = useMemo(() => sizeStats(orders, fin, range), [orders, fin, range])
   const weekdays = useMemo(() => weekdayStats(orders, range), [orders, range])
   const years = useMemo(() => activeYears(orders, fin), [orders, fin])
 
@@ -180,7 +180,8 @@ export function BusinessPage({ orders, onToast }: { orders: CakeOrder[]; onToast
     }`,
   }))
 
-  const hasCakeCosts = summary.cakesWithCost > 0
+  // per-cake profit needs logged spending to divide up
+  const hasCakeCosts = summary.variableCosts > 0 && summary.orderCount > 0
 
   if (loading) return <p className="empty">Loading your numbers…</p>
 
@@ -284,11 +285,20 @@ export function BusinessPage({ orders, onToast }: { orders: CakeOrder[]; onToast
           sub={
             summary.otherIncome > 0
               ? `${fmtMoney(summary.orderRevenue)} cakes + ${fmtMoney(summary.otherIncome)} other`
-              : `from ${summary.orderCount} ${summary.orderCount === 1 ? 'cake' : 'cakes'}`
+              : `from ${summary.orderCount} ${summary.orderCount === 1 ? 'cake' : 'cakes'} up to today`
           }
           delta={revenueDelta}
           deltaGoodWhenUp
         />
+        {summary.bookedAhead > 0 && (
+          <Stat
+            label="Booked ahead"
+            value={fmtMoney(summary.bookedAhead)}
+            sub={`${summary.bookedAheadCount} ${
+              summary.bookedAheadCount === 1 ? 'cake' : 'cakes'
+            } still to bake — not counted as money in yet`}
+          />
+        )}
         <Stat
           label="Money out"
           value={fmtMoney(summary.totalCosts)}
@@ -505,9 +515,10 @@ export function BusinessPage({ orders, onToast }: { orders: CakeOrder[]; onToast
             <h2 className="section-label">Profit per cake</h2>
           </header>
           <p className="hint">
-            Worked out from the ingredient cost you put on each order — {summary.cakesWithCost} of{' '}
-            {summary.orderCount} cakes have one. This ignores rent and other fixed bills, so it's
-            "is this cake worth baking?", not your bottom line.
+            An estimate: your {fmtMoney(summary.variableCosts)} of logged spending spread evenly
+            across the {summary.orderCount} cakes you sold, so about{' '}
+            <strong>{fmtMoney(summary.costPerCake)} a cake</strong>. It ignores rent and other fixed
+            bills, so it answers "is this cake worth baking?" rather than what your bottom line is.
           </p>
           <div className="chart-table-wrap">
             <table className="chart-table">
@@ -516,7 +527,7 @@ export function BusinessPage({ orders, onToast }: { orders: CakeOrder[]; onToast
                   <th scope="col">Size</th>
                   <th scope="col">Cakes</th>
                   <th scope="col">Revenue</th>
-                  <th scope="col">Ingredients</th>
+                  <th scope="col">Est. cost</th>
                   <th scope="col">Profit</th>
                   <th scope="col">Margin</th>
                 </tr>

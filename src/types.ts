@@ -27,8 +27,6 @@ export interface CakeOrder {
   pickupDate: string // YYYY-MM-DD
   pickupTime: string // HH:mm ('' if not set)
   price: number
-  /** what the ingredients/supplies for this cake cost to make (0 = not tracked) */
-  cakeCost: number
   depositAmount: number
   depositMethod: PaymentMethod | ''
   balanceMethod: PaymentMethod | ''

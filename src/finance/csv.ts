@@ -56,8 +56,6 @@ export function ordersRows(orders: CakeOrder[], range: Range): string[] {
       'Flavour',
       'Writing on cake',
       'Price',
-      'Ingredient cost',
-      'Profit per cake',
       'Deposit',
       'Deposit method',
       'Balance',
@@ -69,7 +67,6 @@ export function ordersRows(orders: CakeOrder[], range: Range): string[] {
   ]
   for (const o of orders.filter((o) => o.pickupDate >= range.from && o.pickupDate <= range.to)) {
     const price = Number(o.price) || 0
-    const cost = Number(o.cakeCost) || 0
     const deposit = Number(o.depositAmount) || 0
     lines.push(
       row([
@@ -82,8 +79,6 @@ export function ordersRows(orders: CakeOrder[], range: Range): string[] {
         o.flavour,
         o.cakeText,
         n2(price),
-        cost ? n2(cost) : '',
-        cost ? n2(price - cost) : '',
         n2(deposit),
         o.depositMethod,
         n2(Math.max(0, price - deposit)),
@@ -185,7 +180,10 @@ export function fullReportLines(orders: CakeOrder[], fin: FinanceData, range: Ra
     row(['Profit margin %', s.revenue > 0 ? n2(s.margin * 100) : '']),
     row(['Cakes sold', s.orderCount]),
     row(['Average per cake', n2(s.avgOrder)]),
-    row(['Still owed to you', n2(s.outstanding)]),
+    row(['Average spend per cake', n2(s.costPerCake)]),
+    row(['Still to collect', n2(s.outstanding)]),
+    row(['  of which due at upcoming pickups', n2(s.dueAtPickup)]),
+    row(['  of which overdue', n2(s.overdue)]),
   ])
 
   section('Month by month', monthlyRows(orders, fin, range))
@@ -204,17 +202,17 @@ export function fullReportLines(orders: CakeOrder[], fin: FinanceData, range: Ra
     ])
   }
 
-  const flav = flavourStats(orders, range)
+  const flav = flavourStats(orders, fin, range)
   if (flav.length) {
     section('By flavour', [
-      row(['Flavour', 'Cakes', 'Revenue', 'Average price', 'Ingredient cost', 'Profit']),
+      row(['Flavour', 'Cakes', 'Revenue', 'Average price', 'Est. cost', 'Est. profit']),
       ...flav.map((f) =>
         row([f.name, f.orders, n2(f.revenue), n2(f.avgPrice), f.cost ? n2(f.cost) : '', f.profit === null ? '' : n2(f.profit)])
       ),
     ])
   }
 
-  const sizes = sizeStats(orders, range)
+  const sizes = sizeStats(orders, fin, range)
   if (sizes.length) {
     section('By size', [
       row(['Size', 'Cakes', 'Revenue', 'Average price']),

@@ -30,7 +30,7 @@
     - **Other income** — market stalls, classes, catering; anything that isn't a logged cake order.
     - **Plain-English insights** — what your biggest cost is, whether sales are up or down on the period before, your best and worst months, your best seller, your busiest pickup day, and what's still owed to you.
     - **Break-even** — how many cakes a month you need to sell before a dollar is actually yours.
-    - **Profit per cake** — put an ingredient cost on an order and you get profit and margin per cake, per flavour and per size.
+    - **Profit per cake** — your logged spending spread across the cakes you sold, giving an estimated cost, profit and margin per flavour and per size. Nothing to fill in: it comes from the expenses you're already logging, because nobody can reliably say what the batter and box for one specific cake cost.
     - **Export** — any period, a single month, a full year, or everything, as a spreadsheet that opens in Excel, Numbers or Google Sheets. One file with the summary, month-by-month, cost breakdown, every cake and every expense.
     - **Monthly goals** — set what you'd like to make each month and track against it.
     - **HST & tax time** — how close you are to the $30,000 small-supplier limit (and a warning as you approach it), and once you're registered, HST collected, HST already paid on purchases, and a quarter-by-quarter summary. Estimates to take to an accountant, not tax advice.
@@ -41,7 +41,9 @@
     Two rules, so the figures always mean the same thing:
 
     1. **A cake counts as revenue on its pickup date**, at its full price — that's when the cake leaves and the money settles.
-    2. **Profit = revenue − (logged spending + fixed bills).** The per-cake ingredient cost is deliberately *not* added on top, because the grocery run you log as spending is the same money and counting both would double it. Per-cake cost drives the profit-per-cake figures instead.
+    2. **Profit = revenue − (logged spending + fixed bills).**
+
+    Per-cake cost is an estimate, worked out as total logged spending ÷ cakes sold over whatever period you're looking at. One rate for the period rather than per-month, so the per-cake figures always add back up to the profit above them.
 
     Fixed bills are pro-rated by day at the edges of a period, so "Mar 15 → Apr 14" charges half of each month's rent rather than two full months.
 

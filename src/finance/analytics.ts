@@ -31,17 +31,17 @@ export interface Summary {
   margin: number // 0–1
   orderCount: number
   avgOrder: number
-  /** sum of per-cake ingredient costs entered on orders in range */
-  cakeCostTotal: number
-  cakesWithCost: number
-  /** order revenue − per-cake ingredient costs (ignores overheads) */
-  estGrossProfit: number
+  /** average day-to-day spending per cake sold — variableCosts / orderCount */
+  costPerCake: number
   /** everything not yet in your hands: dueAtPickup + overdue */
   outstanding: number
   /** balances on cakes that haven't been collected yet */
   dueAtPickup: number
   /** balances on cakes already collected — genuinely late */
   overdue: number
+  /** value of cakes booked for after today — not income yet */
+  bookedAhead: number
+  bookedAheadCount: number
 }
 
 export interface MonthStat {
@@ -170,8 +170,6 @@ export function summarise(orders: CakeOrder[], fin: FinanceData, range: Range): 
   const totalCosts = variableCosts + fixedCosts
   const profit = revenue - totalCosts
 
-  const withCost = inOrders.filter((o) => (Number(o.cakeCost) || 0) > 0)
-  const cakeCostTotal = withCost.reduce((s, o) => s + (Number(o.cakeCost) || 0), 0)
 
   /*
    * Money not yet collected. Counting only picked-up-and-unpaid cakes was
@@ -193,6 +191,11 @@ export function summarise(orders: CakeOrder[], fin: FinanceData, range: Range): 
 
   const outstanding = dueAtPickup + overdue
 
+  // work that's on the books but hasn't happened yet
+  const today = ymd(new Date())
+  const ahead = orders.filter((o) => o.pickupDate > today && o.status !== 'completed')
+  const bookedAhead = ahead.reduce((sum, o) => sum + (Number(o.price) || 0), 0)
+
   return {
     revenue,
     orderRevenue,
@@ -204,12 +207,12 @@ export function summarise(orders: CakeOrder[], fin: FinanceData, range: Range): 
     margin: revenue > 0 ? profit / revenue : 0,
     orderCount: inOrders.length,
     avgOrder: inOrders.length ? orderRevenue / inOrders.length : 0,
-    cakeCostTotal,
-    cakesWithCost: withCost.length,
-    estGrossProfit: orderRevenue - cakeCostTotal,
+    costPerCake: inOrders.length ? variableCosts / inOrders.length : 0,
     outstanding,
     dueAtPickup,
     overdue,
+    bookedAhead,
+    bookedAheadCount: ahead.length,
   }
 }
 
@@ -311,21 +314,56 @@ export function fixedCostBreakdown(fin: FinanceData, range: Range): CategorySlic
     .sort((a, b) => b.total - a.total)
 }
 
+// ── what a cake costs to make ────────────────────────────────────────────────
+
+/*
+ * Nobody can reliably say what the batter, cream and box for one specific cake
+ * cost, so the app no longer asks. Instead each month's logged spending is
+ * spread evenly over the cakes sold that month, which is both easier to get
+ * right and closer to the truth over any sensible stretch of time.
+ */
+
+/**
+ * What one cake cost to make, estimated by spreading the period's logged
+ * spending evenly over the cakes sold in it.
+ *
+ * One rate for the whole period rather than a per-month rate, deliberately:
+ * a month's rate has to fall back to something when that month has cakes but
+ * no grocery run logged, and any fallback invents cost that was never spent —
+ * the per-cake table would then total more than the profit-and-loss above it
+ * on the same screen. A single rate always reconciles exactly. Month-level
+ * detail is still there in the month-by-month chart, which uses real figures.
+ */
+export function costAllocator(
+  orders: CakeOrder[],
+  fin: FinanceData,
+  range: Range
+): { rateFor: (ymd: string) => number; overall: number; hasData: boolean } {
+  const s = summarise(orders, fin, range)
+  return {
+    rateFor: () => s.costPerCake,
+    overall: s.costPerCake,
+    hasData: s.variableCosts > 0 && s.orderCount > 0,
+  }
+}
+
 // ── what actually sells ──────────────────────────────────────────────────────
 
-function groupProducts(orders: CakeOrder[], range: Range, key: (o: CakeOrder) => string): ProductStat[] {
-  const map = new Map<string, { orders: number; revenue: number; cost: number; costed: number }>()
+function groupProducts(
+  orders: CakeOrder[],
+  fin: FinanceData,
+  range: Range,
+  key: (o: CakeOrder) => string
+): ProductStat[] {
+  const alloc = costAllocator(orders, fin, range)
+  const map = new Map<string, { orders: number; revenue: number; cost: number }>()
   for (const o of orders) {
     if (!inRange(o.pickupDate, range)) continue
     const name = key(o) || 'Not set'
-    const cur = map.get(name) ?? { orders: 0, revenue: 0, cost: 0, costed: 0 }
+    const cur = map.get(name) ?? { orders: 0, revenue: 0, cost: 0 }
     cur.orders += 1
     cur.revenue += Number(o.price) || 0
-    const c = Number(o.cakeCost) || 0
-    if (c > 0) {
-      cur.cost += c
-      cur.costed += 1
-    }
+    cur.cost += alloc.rateFor(o.pickupDate)
     map.set(name, cur)
   }
   return [...map.entries()]
@@ -334,16 +372,19 @@ function groupProducts(orders: CakeOrder[], range: Range, key: (o: CakeOrder) =>
       orders: v.orders,
       revenue: v.revenue,
       avgPrice: v.orders ? v.revenue / v.orders : 0,
-      cost: v.cost,
-      profit: v.costed > 0 ? v.revenue - v.cost : null,
+      cost: alloc.hasData ? v.cost : 0,
+      // without any logged spending there's nothing to subtract, so say so
+      // rather than reporting the full price as profit
+      profit: alloc.hasData ? v.revenue - v.cost : null,
     }))
     .sort((a, b) => b.revenue - a.revenue)
 }
 
-export const flavourStats = (orders: CakeOrder[], range: Range) =>
-  groupProducts(orders, range, (o) => o.flavour)
+export const flavourStats = (orders: CakeOrder[], fin: FinanceData, range: Range) =>
+  groupProducts(orders, fin, range, (o) => o.flavour)
 
-export const sizeStats = (orders: CakeOrder[], range: Range) => groupProducts(orders, range, (o) => o.size)
+export const sizeStats = (orders: CakeOrder[], fin: FinanceData, range: Range) =>
+  groupProducts(orders, fin, range, (o) => o.size)
 
 /** Which weekday the cakes actually go out on. */
 export function weekdayStats(orders: CakeOrder[], range: Range): { label: string; orders: number; revenue: number }[] {
@@ -397,14 +438,8 @@ export function breakEven(orders: CakeOrder[], fin: FinanceData, range: Range): 
   const s = summarise(orders, fin, range)
   const avgPrice = s.avgOrder
 
-  // Prefer the owner's own per-cake ingredient figures; otherwise spread the
-  // logged variable spend across the cakes sold.
-  const avgVariablePerCake =
-    s.cakesWithCost > 0
-      ? s.cakeCostTotal / s.cakesWithCost
-      : s.orderCount > 0
-        ? s.variableCosts / s.orderCount
-        : 0
+  // day-to-day spending spread over the cakes it produced
+  const avgVariablePerCake = s.costPerCake
 
   const contributionPerCake = avgPrice - avgVariablePerCake
   const workable = avgPrice > 0 && contributionPerCake > 0 && monthlyFixed > 0
@@ -424,16 +459,30 @@ export function breakEven(orders: CakeOrder[], fin: FinanceData, range: Range): 
 const pad = (n: number) => String(n).padStart(2, '0')
 const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 
+/**
+ * No range ever runs past today.
+ *
+ * A cake booked for next week hasn't been baked, collected or paid for, so it
+ * isn't income yet. It also used to make the presets contradict each other:
+ * "This month" ran to the 30th and counted future bookings while "3 months"
+ * stopped at today and didn't — so this month could show MORE than the three
+ * months containing it. Future work shows up as `bookedAhead` instead.
+ */
+function capToToday(r: Range): Range {
+  const today = ymd(new Date())
+  return r.to > today ? { ...r, to: today } : r
+}
+
 export function monthRange(ym: string): Range {
-  return {
+  return capToToday({
     from: `${ym}-01`,
     to: `${ym}-${pad(daysInMonth(ym))}`,
     label: monthLabel(ym, true),
-  }
+  })
 }
 
 export function yearRange(year: number): Range {
-  return { from: `${year}-01-01`, to: `${year}-12-31`, label: String(year) }
+  return capToToday({ from: `${year}-01-01`, to: `${year}-12-31`, label: String(year) })
 }
 
 export function presetRange(preset: string, orders: CakeOrder[], fin: FinanceData): Range {
@@ -468,8 +517,7 @@ export function allTimeRange(orders: CakeOrder[], fin: FinanceData): Range {
   const today = ymd(new Date())
   if (!dates.length) return { from: `${new Date().getFullYear()}-01-01`, to: today, label: 'All time' }
   const from = dates.reduce((a, b) => (a < b ? a : b))
-  const to = dates.reduce((a, b) => (a > b ? a : b))
-  return { from, to: to > today ? to : today, label: 'All time' }
+  return { from, to: today, label: 'All time' }
 }
 
 /**

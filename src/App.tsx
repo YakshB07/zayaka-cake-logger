@@ -87,12 +87,14 @@ export default function App() {
     await refresh()
   }
 
-  // Picking the cake up and paying for it are two separate facts. This used to
-  // set balancePaid = true automatically, which quietly wrote off any balance
-  // that hadn't actually been handed over — and made "still owed" always $0.
+  // Marking a cake picked up settles it: the balance is handed over at the
+  // door, so it counts as paid. If it wasn't, "Mark unpaid" on the card puts
+  // it back and it starts showing as overdue.
   const handleComplete = async (order: CakeOrder) => {
+    const collecting = order.status !== 'completed'
     await api.updateOrder(order.id, {
-      status: order.status === 'completed' ? 'upcoming' : 'completed',
+      status: collecting ? 'completed' : 'upcoming',
+      balancePaid: collecting ? true : order.balancePaid,
     })
     await refresh()
   }

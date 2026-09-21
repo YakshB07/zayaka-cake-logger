@@ -201,7 +201,7 @@ export function buildInsights(orders: CakeOrder[], fin: FinanceData, range: Rang
   }
 
   // ── what sells ────────────────────────────────────────────────────────────
-  const flavours = flavourStats(orders, range)
+  const flavours = flavourStats(orders, fin, range)
   if (flavours.length >= 2 && flavours[0].revenue > 0) {
     const f = flavours[0]
     const share = s.orderRevenue > 0 ? f.revenue / s.orderRevenue : 0
@@ -271,6 +271,14 @@ export function buildInsights(orders: CakeOrder[], fin: FinanceData, range: Rang
     })
   }
 
+  if (s.bookedAhead > 0) {
+    out.push({
+      tone: 'good',
+      text: `${money(s.bookedAhead)} is already booked in for cakes you haven't baked yet.`,
+      detail: `That's ${plural(s.bookedAheadCount, 'cake', 'cakes')} with a pickup date still to come. It isn't counted in the figures above, because the money hasn't reached you yet — it'll appear the day each cake is collected.`,
+    })
+  }
+
   // ── nudges about what's missing, so the numbers can be trusted ────────────
   if (fin.fixedCosts.length === 0 && s.revenue > 0) {
     out.push({
@@ -281,14 +289,6 @@ export function buildInsights(orders: CakeOrder[], fin: FinanceData, range: Rang
     })
   }
 
-  if (s.cakesWithCost > 0 && s.variableCosts === 0) {
-    out.push({
-      tone: 'watch',
-      text: `You've noted what the ingredients cost on ${plural(s.cakesWithCost, 'cake', 'cakes')}, but none of your actual shopping is logged.`,
-      detail:
-        'Profit here only counts money you\'ve logged going out, so those ingredient costs aren\'t in it yet. Adding your grocery runs under Spending closes the gap.',
-    })
-  }
 
   const unpriced = orders.filter(
     (o) => o.pickupDate >= range.from && o.pickupDate <= range.to && !o.price
