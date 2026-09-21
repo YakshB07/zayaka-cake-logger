@@ -170,9 +170,22 @@ export default function App() {
     <div className="app">
       <header className="header no-print">
         <div className="header-inner">
-          <div className="brand">
-            <h1>Zayaka</h1>
-            <span className="brand-sub">{current.sub}</span>
+          {/* Row 1 never competes with the tabs for space, so the header can't
+              overflow and force the phone to widen its layout viewport. */}
+          <div className="header-top">
+            <div className="brand">
+              <h1>Zayaka</h1>
+              <span className="brand-sub">{current.sub}</span>
+            </div>
+
+            {view !== 'business' && (
+              <button className="btn btn-primary" onClick={() => openNew()}>
+                <span className="btn-plus" aria-hidden="true">
+                  +
+                </span>
+                New Order
+              </button>
+            )}
           </div>
 
           <nav className="view-switch" aria-label="Sections">
@@ -187,15 +200,6 @@ export default function App() {
               </button>
             ))}
           </nav>
-
-          {view !== 'business' && (
-            <button className="btn btn-primary" onClick={() => openNew()}>
-              <span className="btn-plus" aria-hidden="true">
-                +
-              </span>
-              New Order
-            </button>
-          )}
         </div>
       </header>
 

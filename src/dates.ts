@@ -51,5 +51,10 @@ export function countdownLabel(ymd: string): { text: string; tone: 'today' | 'so
 }
 
 export function money(n: number): string {
-  return `$${n % 1 === 0 ? n : n.toFixed(2)}`
+  // thousands separated, cents only when they mean something ($1,220 not $1220)
+  const whole = n % 1 === 0
+  return `$${n.toLocaleString('en-CA', {
+    minimumFractionDigits: whole ? 0 : 2,
+    maximumFractionDigits: whole ? 0 : 2,
+  })}`
 }

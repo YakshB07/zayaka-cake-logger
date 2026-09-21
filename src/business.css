@@ -14,13 +14,25 @@
 /* ── header: switching between cakes and the books ── */
 
 .view-switch {
-  display: inline-flex;
-  margin-right: auto;
-  margin-left: 20px;
+  display: flex;
+  width: 100%;
   background: var(--surface-2);
   border-radius: 10px;
   padding: 3px;
   gap: 2px;
+  /* scrolls rather than stretching the page if it ever runs out of room */
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.view-switch::-webkit-scrollbar {
+  display: none;
+}
+
+.view-switch button {
+  flex: 1 1 0;
+  min-width: max-content;
 }
 
 .view-switch button {
@@ -181,7 +193,7 @@
 
 .kpi-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr));
   gap: 12px;
 }
 
@@ -243,11 +255,11 @@
 
 .insights {
   list-style: none;
-  margin: 10px 0 0;
+  margin: 12px 0 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 14px;
 }
 
 .insight {
@@ -255,8 +267,27 @@
   gap: 11px;
   align-items: flex-start;
   font-size: 14.5px;
-  line-height: 1.45;
+  line-height: 1.5;
   color: var(--text);
+}
+
+.insight-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.insight-text {
+  font-weight: 550;
+}
+
+/* the supporting sentence: same size, quieter, so the point still leads */
+.insight-detail {
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-2);
+  font-weight: 400;
 }
 
 /* the mark is an icon + colour pair, never colour alone */
@@ -291,7 +322,9 @@
 
 .chart-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  /* min() so a narrow phone gets one full-width column instead of a
+     340px column that overflows the screen */
+  grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr));
   gap: 14px;
 }
 
@@ -582,7 +615,7 @@
 
 .be-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr));
   gap: 12px;
   margin: 14px 0 12px;
 }
@@ -959,16 +992,6 @@
 /* ── phones ── */
 
 @media (max-width: 720px) {
-  .view-switch {
-    margin-left: 0;
-    order: 3;
-    width: 100%;
-  }
-
-  .view-switch button {
-    flex: 1;
-  }
-
   .hero-spark {
     display: none;
   }

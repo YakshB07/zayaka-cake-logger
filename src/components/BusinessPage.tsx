@@ -208,15 +208,22 @@ export function BusinessPage({ orders, onToast }: { orders: CakeOrder[]; onToast
         <div className="period-picks">
           <label className="pick">
             <span>Month</span>
-            <input
-              type="month"
+            {/* a select, not <input type="month"> — an empty month input renders
+                as "---------, ----" on a phone and looks broken */}
+            <select
               value={customMonth}
-              max={todayYmd().slice(0, 7)}
               onChange={(e) => {
                 setCustomMonth(e.target.value)
                 setCustomYear('')
               }}
-            />
+            >
+              <option value="">—</option>
+              {Array.from({ length: 24 }, (_, i) => addMonths(todayYmd().slice(0, 7), -i)).map((ym) => (
+                <option key={ym} value={ym}>
+                  {monthLabel(ym, true)}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="pick">
             <span>Year</span>
@@ -241,11 +248,18 @@ export function BusinessPage({ orders, onToast }: { orders: CakeOrder[]; onToast
       {/* ── the one number that matters ── */}
       <section className="hero-card">
         <p className="hero-label">
-          {summary.profit >= 0 ? 'Profit' : 'Loss'} · {range.label}
+          {summary.totalCosts === 0 && summary.revenue > 0
+            ? 'Money in'
+            : summary.profit >= 0
+              ? 'Profit'
+              : 'Loss'}{' '}
+          · {range.label}
         </p>
         <p className={`hero-figure ${summary.profit < 0 ? 'is-loss' : ''}`}>{fmtMoney(summary.profit)}</p>
         <p className="hero-meta">
-          {fmtMoney(summary.revenue)} came in, {fmtMoney(summary.totalCosts)} went out
+          {summary.totalCosts === 0 && summary.revenue > 0
+            ? "no costs logged yet, so this isn't profit"
+            : `${fmtMoney(summary.revenue)} came in, ${fmtMoney(summary.totalCosts)} went out`}
           {prevSummary.revenue > 0 && (
             <>
               {' · '}
@@ -282,12 +296,17 @@ export function BusinessPage({ orders, onToast }: { orders: CakeOrder[]; onToast
         />
         <Stat
           label="Profit margin"
-          value={summary.revenue > 0 ? `${Math.round(summary.margin * 100)}%` : '—'}
+          /* A 100% margin only ever means "no costs entered". Showing it as a
+             real figure flatters the owner and hides the thing to fix. */
+          value={summary.totalCosts === 0 ? '—' : `${Math.round(summary.margin * 100)}%`}
           sub={
-            summary.revenue > 0
-              ? `${fmtMoney(summary.profit / Math.max(1, summary.orderCount))} kept per cake`
-              : 'no sales yet'
+            summary.totalCosts === 0
+              ? summary.revenue > 0
+                ? 'add your costs below to see this'
+                : 'no sales yet'
+              : `${fmtMoney(summary.profit / Math.max(1, summary.orderCount))} kept per cake`
           }
+          tone={summary.totalCosts === 0 && summary.revenue > 0 ? 'watch' : undefined}
         />
         <Stat
           label="Average cake"
@@ -311,7 +330,10 @@ export function BusinessPage({ orders, onToast }: { orders: CakeOrder[]; onToast
               <span className="insight-mark" aria-hidden="true">
                 {ins.tone === 'good' ? '✓' : ins.tone === 'watch' ? '!' : '·'}
               </span>
-              {ins.text}
+              <span className="insight-body">
+                <span className="insight-text">{ins.text}</span>
+                {ins.detail && <span className="insight-detail">{ins.detail}</span>}
+              </span>
             </li>
           ))}
         </ul>
