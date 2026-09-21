@@ -25,6 +25,7 @@ export function OrderForm({ initial, onSave, onCancel }: Props) {
   const [pickupDate, setPickupDate] = useState(initial?.pickupDate ?? '')
   const [pickupTime, setPickupTime] = useState(initial?.pickupTime ?? '')
   const [price, setPrice] = useState(initial?.price ? String(initial.price) : '')
+  const [cakeCost, setCakeCost] = useState(initial?.cakeCost ? String(initial.cakeCost) : '')
   const [depositAmount, setDepositAmount] = useState(initial?.depositAmount ? String(initial.depositAmount) : '')
   const [depositMethod, setDepositMethod] = useState<PaymentMethod | ''>(initial?.depositMethod ?? '')
   const [balanceMethod, setBalanceMethod] = useState<PaymentMethod | ''>(initial?.balanceMethod ?? '')
@@ -61,6 +62,7 @@ export function OrderForm({ initial, onSave, onCancel }: Props) {
   )
 
   const priceNum = Number(price) || 0
+  const costNum = Number(cakeCost) || 0
   const depositNum = Number(depositAmount) || 0
   const balance = Math.max(0, priceNum - depositNum)
   const canSave =
@@ -87,6 +89,7 @@ export function OrderForm({ initial, onSave, onCancel }: Props) {
         pickupDate,
         pickupTime,
         price: priceNum,
+        cakeCost: costNum,
         depositAmount: depositNum,
         depositMethod,
         balanceMethod,
@@ -306,6 +309,36 @@ export function OrderForm({ initial, onSave, onCancel }: Props) {
                     </button>
                   ))}
                 </div>
+              </div>
+            )}
+
+            <label className="field">
+              <span>What the ingredients cost you</span>
+              <div className="money-input">
+                <span>$</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputMode="decimal"
+                  value={cakeCost}
+                  onChange={(e) => setCakeCost(e.target.value)}
+                  placeholder="0"
+                />
+              </div>
+              <small className="hint">
+                Optional — roughly what the batter, cream and box for this one cake cost. Fills in the
+                profit-per-cake figures on the Business page.
+              </small>
+            </label>
+
+            {priceNum > 0 && costNum > 0 && (
+              <div className="balance-box">
+                <span>You make on this cake</span>
+                <strong>
+                  {money(priceNum - costNum)}
+                  {priceNum > 0 && ` (${Math.round(((priceNum - costNum) / priceNum) * 100)}%)`}
+                </strong>
               </div>
             )}
 

@@ -27,6 +27,8 @@ export interface CakeOrder {
   pickupDate: string // YYYY-MM-DD
   pickupTime: string // HH:mm ('' if not set)
   price: number
+  /** what the ingredients/supplies for this cake cost to make (0 = not tracked) */
+  cakeCost: number
   depositAmount: number
   depositMethod: PaymentMethod | ''
   balanceMethod: PaymentMethod | ''
@@ -39,3 +41,64 @@ export interface CakeOrder {
 }
 
 export type NewOrder = Omit<CakeOrder, 'id' | 'createdAt' | 'remindersSent'>
+
+// ── Business tracker ──────────────────────────────────────────────────────────
+
+/** How often a fixed cost is actually paid. Analytics spreads it per month. */
+export type Cadence = 'weekly' | 'monthly' | 'quarterly' | 'yearly'
+
+/** A recurring bill that doesn't change with how many cakes are sold. */
+export interface FixedCost {
+  id: string
+  createdAt: string
+  name: string // owner-named, e.g. 'Rent', 'Insurance', 'Website'
+  amount: number // amount per `cadence`
+  cadence: Cadence
+  startMonth: string // YYYY-MM — first month this bill applies
+  endMonth: string // YYYY-MM, '' = still paying it
+  notes: string
+}
+
+/** Owner-named bucket an expense goes into. Unlimited, renameable. */
+export interface CostCategory {
+  id: string
+  createdAt: string
+  name: string // e.g. 'Ingredients', 'Boxes & Packaging', 'Gas'
+  archived: boolean // hidden from pickers, kept so old expenses keep their name
+}
+
+/** One-off money going out, filed under a category. */
+export interface Expense {
+  id: string
+  createdAt: string
+  date: string // YYYY-MM-DD
+  categoryId: string
+  amount: number
+  vendor: string
+  note: string
+  orderId: string // '' unless it was bought for one specific cake
+}
+
+/** Money in that isn't a logged cake order — walk-ins, market days, classes. */
+export interface OtherIncome {
+  id: string
+  createdAt: string
+  date: string // YYYY-MM-DD
+  source: string
+  amount: number
+  note: string
+}
+
+export interface FinanceData {
+  fixedCosts: FixedCost[]
+  categories: CostCategory[]
+  expenses: Expense[]
+  income: OtherIncome[]
+}
+
+export type FinanceKind = keyof FinanceData
+
+export type NewFixedCost = Omit<FixedCost, 'id' | 'createdAt'>
+export type NewCostCategory = Omit<CostCategory, 'id' | 'createdAt'>
+export type NewExpense = Omit<Expense, 'id' | 'createdAt'>
+export type NewOtherIncome = Omit<OtherIncome, 'id' | 'createdAt'>

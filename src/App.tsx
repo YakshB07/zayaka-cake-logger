@@ -3,9 +3,11 @@ import type { CakeOrder, NewOrder } from './types'
 import { api } from './api'
 import { OrderForm } from './components/OrderForm'
 import { OrderCard } from './components/OrderCard'
+import { BusinessPage } from './components/BusinessPage'
 import { daysUntil, todayYmd } from './dates'
 
 type Filter = 'upcoming' | 'today' | 'completed' | 'all'
+type View = 'orders' | 'business'
 
 const FILTERS: Array<{ value: Filter; label: string }> = [
   { value: 'upcoming', label: 'Upcoming' },
@@ -22,6 +24,7 @@ export default function App() {
   const [filter, setFilter] = useState<Filter>('upcoming')
   const [search, setSearch] = useState('')
   const [toast, setToast] = useState('')
+  const [view, setView] = useState<View>('orders')
 
   const refresh = useCallback(async () => {
     try {
@@ -114,17 +117,42 @@ export default function App() {
         <div className="header-inner">
           <div className="brand">
             <h1>Zayaka</h1>
-            <span className="brand-sub">Cake Orders</span>
+            <span className="brand-sub">{view === 'orders' ? 'Cake Orders' : 'Business'}</span>
           </div>
-          <button className="btn btn-primary" onClick={openNew}>
-            <span className="btn-plus" aria-hidden="true">
-              +
-            </span>
-            New Order
-          </button>
+
+          <nav className="view-switch" aria-label="Sections">
+            <button
+              className={view === 'orders' ? 'view-active' : ''}
+              aria-current={view === 'orders' ? 'page' : undefined}
+              onClick={() => setView('orders')}
+            >
+              Cakes
+            </button>
+            <button
+              className={view === 'business' ? 'view-active' : ''}
+              aria-current={view === 'business' ? 'page' : undefined}
+              onClick={() => setView('business')}
+            >
+              Business
+            </button>
+          </nav>
+
+          {view === 'orders' && (
+            <button className="btn btn-primary" onClick={openNew}>
+              <span className="btn-plus" aria-hidden="true">
+                +
+              </span>
+              New Order
+            </button>
+          )}
         </div>
       </header>
 
+      {view === 'business' ? (
+        <main className="main">
+          <BusinessPage orders={orders} onToast={showToast} />
+        </main>
+      ) : (
       <main className="main">
         {dueSoon.length > 0 && (
           <section className="due-strip" aria-label="Cakes due soon">
@@ -208,6 +236,7 @@ export default function App() {
           </div>
         )}
       </main>
+      )}
 
       {formOpen && (
         <OrderForm

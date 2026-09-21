@@ -10,6 +10,29 @@
     - **Text reminders** — 2 days before, 1 day before, and the morning of pickup, a reminder text goes to **226-961-0140** and **226-961-0150** with all the cake details. There's also a "Text now" button on every order.
     - **Dashboard** — upcoming cakes sorted by pickup, "coming up" alerts for the next 2 days, search, and one-tap "Mark picked up".
 
+    ## The Business tab
+
+    A full finance tracker sitting beside the cake log, built from the orders you're already entering.
+
+    - **Profit, revenue and costs** for any stretch of time — this month, a quarter, a year, all time, or any single month/year you pick.
+    - **Charts** — money in vs money out per month, profit month by month (above and below the line), where the money goes, what earns the most, and your fixed bills one by one. Every chart flips to a plain **Numbers** table.
+    - **Fixed costs** — rent, insurance, website. Paid weekly, monthly, quarterly or yearly; the app converts it all to a monthly figure and counts it in every month between the start and end dates you give it.
+    - **Variable costs** — log spending as it happens under **as many categories as you like, named whatever you like**. Add a new one right from the spending form, rename it any time (old entries follow), hide the ones you've stopped using.
+    - **Other income** — market stalls, classes, catering; anything that isn't a logged cake order.
+    - **Plain-English insights** — what your biggest cost is, whether sales are up or down on the period before, your best and worst months, your best seller, your busiest pickup day, and what's still owed to you.
+    - **Break-even** — how many cakes a month you need to sell before a dollar is actually yours.
+    - **Profit per cake** — put an ingredient cost on an order and you get profit and margin per cake, per flavour and per size.
+    - **Export** — any period, a single month, a full year, or everything, as a spreadsheet that opens in Excel, Numbers or Google Sheets. One file with the summary, month-by-month, cost breakdown, every cake and every expense.
+
+    ### How the numbers are worked out
+
+    Two rules, so the figures always mean the same thing:
+
+    1. **A cake counts as revenue on its pickup date**, at its full price — that's when the cake leaves and the money settles.
+    2. **Profit = revenue − (logged spending + fixed bills).** The per-cake ingredient cost is deliberately *not* added on top, because the grocery run you log as spending is the same money and counting both would double it. Per-cake cost drives the profit-per-cake figures instead.
+
+    Fixed bills are pro-rated by day at the edges of a period, so "Mar 15 → Apr 14" charges half of each month's rent rather than two full months.
+
     ## Running it
 
     You need [Node.js](https://nodejs.org) (v20+). Then, in this folder:
@@ -57,4 +80,6 @@
 
     ## Tech
 
-    React + TypeScript + Vite frontend · Express + node-cron backend · JSON file storage (no database to manage) · Brand colours & fonts matched to zayakabakesnbites.com.
+    React + TypeScript + Vite frontend · Express + node-cron backend · JSON file storage locally, Postgres (Supabase) in production · Brand colours & fonts matched to zayakabakesnbites.com.
+
+    Charts are hand-written SVG — no charting library, so the whole app is still ~68 kB gzipped. The chart palette is checked for colourblind safety and contrast against both the light and dark backgrounds (which is why profit/loss uses blue-and-red rather than the usual green-and-red — green on red is the one pair colourblind readers genuinely can't separate).

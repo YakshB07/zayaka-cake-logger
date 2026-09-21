@@ -7,6 +7,13 @@ import cron from 'node-cron'
 import { listOrders, getOrder, createOrder, updateOrder, deleteOrder, UPLOADS_DIR } from './store.ts'
 import { saveUploadedFiles } from './storage.ts'
 import { checkAndSendReminders, sendReminder, REMINDER_PHONES } from './reminders.ts'
+import {
+  readFinance,
+  createFinanceItem,
+  updateFinanceItem,
+  deleteFinanceItem,
+  isFinanceKind,
+} from './finance-store.ts'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PORT = Number(process.env.PORT ?? 3001)
@@ -55,6 +62,32 @@ app.post('/api/upload', upload.array('photos', 6), async (req, res) => {
   const files = (req.files as Express.Multer.File[]) ?? []
   const urls = await saveUploadedFiles(files)
   res.json({ urls })
+})
+
+// ── Business tracker: fixed costs, cost categories, expenses, other income ──
+// All four collections come back in one request — the dashboard needs them
+// together and they're small enough that splitting it up would just be slower.
+app.get('/api/finance', async (_req, res) => {
+  res.json(await readFinance())
+})
+
+app.post('/api/finance/:kind', async (req, res) => {
+  if (!isFinanceKind(req.params.kind)) return res.status(400).json({ error: 'Unknown record type' })
+  res.status(201).json(await createFinanceItem(req.params.kind, req.body))
+})
+
+app.put('/api/finance/:kind/:id', async (req, res) => {
+  if (!isFinanceKind(req.params.kind)) return res.status(400).json({ error: 'Unknown record type' })
+  const updated = await updateFinanceItem(req.params.kind, req.params.id, req.body)
+  if (!updated) return res.status(404).json({ error: 'Record not found' })
+  res.json(updated)
+})
+
+app.delete('/api/finance/:kind/:id', async (req, res) => {
+  if (!isFinanceKind(req.params.kind)) return res.status(400).json({ error: 'Unknown record type' })
+  if (!(await deleteFinanceItem(req.params.kind, req.params.id)))
+    return res.status(404).json({ error: 'Record not found' })
+  res.json({ ok: true })
 })
 
 // Manually fire a reminder right now (dayOf-style message)
