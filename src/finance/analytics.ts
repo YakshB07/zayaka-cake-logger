@@ -36,8 +36,12 @@ export interface Summary {
   cakesWithCost: number
   /** order revenue − per-cake ingredient costs (ignores overheads) */
   estGrossProfit: number
-  /** still owed on cakes already picked up */
+  /** everything not yet in your hands: dueAtPickup + overdue */
   outstanding: number
+  /** balances on cakes that haven't been collected yet */
+  dueAtPickup: number
+  /** balances on cakes already collected — genuinely late */
+  overdue: number
 }
 
 export interface MonthStat {
@@ -169,10 +173,25 @@ export function summarise(orders: CakeOrder[], fin: FinanceData, range: Range): 
   const withCost = inOrders.filter((o) => (Number(o.cakeCost) || 0) > 0)
   const cakeCostTotal = withCost.reduce((s, o) => s + (Number(o.cakeCost) || 0), 0)
 
-  // money still owed on cakes that already went out the door
-  const outstanding = orders
-    .filter((o) => o.status === 'completed' && !o.balancePaid)
-    .reduce((s, o) => s + Math.max(0, (Number(o.price) || 0) - (Number(o.depositAmount) || 0)), 0)
+  /*
+   * Money not yet collected. Counting only picked-up-and-unpaid cakes was
+   * wrong twice over: it ignored the balances due on every cake still to be
+   * collected (usually most of what she's owed), and marking a cake picked up
+   * used to force balancePaid = true, so that combination barely existed.
+   * Split it instead — what's coming at pickup, and what's genuinely late.
+   */
+  const balanceOf = (o: CakeOrder) =>
+    o.balancePaid ? 0 : Math.max(0, (Number(o.price) || 0) - (Number(o.depositAmount) || 0))
+
+  const dueAtPickup = orders
+    .filter((o) => o.status !== 'completed')
+    .reduce((sum, o) => sum + balanceOf(o), 0)
+
+  const overdue = orders
+    .filter((o) => o.status === 'completed')
+    .reduce((sum, o) => sum + balanceOf(o), 0)
+
+  const outstanding = dueAtPickup + overdue
 
   return {
     revenue,
@@ -189,6 +208,8 @@ export function summarise(orders: CakeOrder[], fin: FinanceData, range: Range): 
     cakesWithCost: withCost.length,
     estGrossProfit: orderRevenue - cakeCostTotal,
     outstanding,
+    dueAtPickup,
+    overdue,
   }
 }
 

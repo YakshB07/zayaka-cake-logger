@@ -254,12 +254,20 @@ export function buildInsights(orders: CakeOrder[], fin: FinanceData, range: Rang
   }
 
   // ── money sitting out there ───────────────────────────────────────────────
-  if (s.outstanding > 0) {
+  if (s.overdue > 0) {
     out.push({
       tone: 'watch',
-      text: `${money(s.outstanding)} is still owed to you on cakes that have already been collected.`,
+      text: `${money(s.overdue)} is owed on cakes that have already been collected.`,
+      detail: `That money is yours, it just hasn't arrived${
+        s.dueAtPickup > 0 ? `, and a further ${money(s.dueAtPickup)} is due at upcoming pickups` : ''
+      }. A short, friendly text with the amount usually sorts it out.`,
+    })
+  } else if (s.dueAtPickup > 0) {
+    out.push({
+      tone: 'info',
+      text: `${money(s.dueAtPickup)} is still to come in, due when the upcoming cakes are collected.`,
       detail:
-        'That money is yours, it just hasn\'t arrived. A short, friendly text with the amount usually sorts it out.',
+        'Nothing is late — this is just the balance left after deposits. Tap "Mark paid" on a cake once the money is in your hands.',
     })
   }
 

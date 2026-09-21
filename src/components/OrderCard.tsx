@@ -9,9 +9,10 @@ interface Props {
   onDelete: () => void
   onRemind: () => void
   onRepeat: () => void
+  onTogglePaid: () => void
 }
 
-export function OrderCard({ order, onEdit, onComplete, onDelete, onRemind, onRepeat }: Props) {
+export function OrderCard({ order, onEdit, onComplete, onDelete, onRemind, onRepeat, onTogglePaid }: Props) {
   const [lightbox, setLightbox] = useState<string | null>(null)
   const cd = countdownLabel(order.pickupDate)
   const dp = dateParts(order.pickupDate)
@@ -88,7 +89,19 @@ export function OrderCard({ order, onEdit, onComplete, onDelete, onRemind, onRep
           <div className="pay-bar" role="img" aria-label={`${paidPct}% paid`}>
             <div className={`pay-fill ${paid ? 'pay-fill-ok' : ''}`} style={{ width: `${paidPct}%` }} />
           </div>
-          {!paid && order.balanceMethod && <p className="pay-method">Balance by {order.balanceMethod}</p>}
+          <div className="pay-foot">
+            {!paid && order.balanceMethod && <span className="pay-method">Balance by {order.balanceMethod}</span>}
+            {/* payment is tracked separately from pickup, so it has its own control */}
+            {balance > 0 && (
+              <button
+                type="button"
+                className={`pay-toggle ${paid ? 'pay-toggle-on' : ''}`}
+                onClick={onTogglePaid}
+              >
+                {paid ? 'Mark unpaid' : `Mark ${money(balance)} paid`}
+              </button>
+            )}
+          </div>
         </div>
       )}
 

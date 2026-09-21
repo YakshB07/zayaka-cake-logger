@@ -314,10 +314,16 @@ export function BusinessPage({ orders, onToast }: { orders: CakeOrder[]; onToast
           sub={`${summary.orderCount} sold · ${cakesPerMonth.toFixed(1)}/month`}
         />
         <Stat
-          label="Still owed to you"
+          label="Still to collect"
           value={fmtMoney(summary.outstanding)}
-          sub={summary.outstanding > 0 ? 'on cakes already picked up' : 'all settled up'}
-          tone={summary.outstanding > 0 ? 'watch' : 'ok'}
+          sub={
+            summary.outstanding === 0
+              ? 'all settled up'
+              : summary.overdue > 0
+                ? `${fmtMoney(summary.dueAtPickup)} at upcoming pickups · ${fmtMoney(summary.overdue)} overdue`
+                : `balances due when these cakes are collected`
+          }
+          tone={summary.overdue > 0 ? 'watch' : undefined}
         />
       </div>
 

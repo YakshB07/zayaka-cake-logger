@@ -87,11 +87,19 @@ export default function App() {
     await refresh()
   }
 
+  // Picking the cake up and paying for it are two separate facts. This used to
+  // set balancePaid = true automatically, which quietly wrote off any balance
+  // that hadn't actually been handed over — and made "still owed" always $0.
   const handleComplete = async (order: CakeOrder) => {
     await api.updateOrder(order.id, {
       status: order.status === 'completed' ? 'upcoming' : 'completed',
-      balancePaid: order.status === 'completed' ? order.balancePaid : true,
     })
+    await refresh()
+  }
+
+  const handleTogglePaid = async (order: CakeOrder) => {
+    await api.updateOrder(order.id, { balancePaid: !order.balancePaid })
+    showToast(order.balancePaid ? 'Marked as still owing' : 'Marked as paid ✓')
     await refresh()
   }
 
@@ -315,6 +323,7 @@ export default function App() {
                     onDelete={() => void handleDelete(o)}
                     onRemind={() => void handleRemind(o)}
                     onRepeat={() => openRepeat(o)}
+                    onTogglePaid={() => void handleTogglePaid(o)}
                   />
                 ))}
               </div>
