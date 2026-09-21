@@ -1216,6 +1216,10 @@ textarea {
   margin-top: 18px;
 }
 
+.upload-error {
+  margin-top: 10px;
+}
+
 .form-error {
   color: var(--danger);
   font-size: 14px;

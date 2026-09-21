@@ -10,9 +10,11 @@ interface Props {
   onRemind: () => void
   onRepeat: () => void
   onTogglePaid: () => void
+  /** a save is in flight for this order — don't accept another tap */
+  busy?: boolean
 }
 
-export function OrderCard({ order, onEdit, onComplete, onDelete, onRemind, onRepeat, onTogglePaid }: Props) {
+export function OrderCard({ order, onEdit, onComplete, onDelete, onRemind, onRepeat, onTogglePaid, busy }: Props) {
   const [lightbox, setLightbox] = useState<string | null>(null)
   const cd = countdownLabel(order.pickupDate)
   const dp = dateParts(order.pickupDate)
@@ -97,6 +99,7 @@ export function OrderCard({ order, onEdit, onComplete, onDelete, onRemind, onRep
                 type="button"
                 className={`pay-toggle ${paid ? 'pay-toggle-on' : ''}`}
                 onClick={onTogglePaid}
+                disabled={busy}
               >
                 {paid ? 'Mark unpaid' : `Mark ${money(balance)} paid`}
               </button>
@@ -119,7 +122,7 @@ export function OrderCard({ order, onEdit, onComplete, onDelete, onRemind, onRep
       )}
 
       <footer className="card-actions">
-        <button className={`btn btn-small ${done ? 'btn-quiet' : 'btn-tint'}`} onClick={onComplete}>
+        <button className={`btn btn-small ${done ? 'btn-quiet' : 'btn-tint'}`} onClick={onComplete} disabled={busy}>
           {done ? 'Undo pickup' : 'Picked up'}
         </button>
         <button
@@ -133,11 +136,16 @@ export function OrderCard({ order, onEdit, onComplete, onDelete, onRemind, onRep
           Edit
         </button>
         {!done && (
-          <button className="btn btn-small btn-quiet" onClick={onRemind} title="Send a reminder to both bakery phones now">
+          <button
+            className="btn btn-small btn-quiet"
+            onClick={onRemind}
+            disabled={busy}
+            title="Send a reminder to both bakery phones now"
+          >
             Send now
           </button>
         )}
-        <button className="btn btn-small btn-quiet btn-destructive" onClick={onDelete}>
+        <button className="btn btn-small btn-quiet btn-destructive" onClick={onDelete} disabled={busy}>
           Delete
         </button>
       </footer>

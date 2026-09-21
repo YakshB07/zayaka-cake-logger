@@ -3,6 +3,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import crypto from 'node:crypto'
 import type { CakeOrder, NewOrder } from '../src/types'
+import { normalizeOrder } from '../src/normalize.ts'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 export const DATA_DIR = path.join(__dirname, 'data')
@@ -21,13 +22,35 @@ if (!process.env.VERCEL) {
 // Falls back to a local JSON file when it isn't, so `npm run dev` needs no setup.
 
 let pgReady: Promise<void> | null = null
+// One pool for the life of the process. This used to build a fresh Pool on
+// every call — and createOrder/deleteOrder call it twice each — so every
+// request opened new connections that were never released, walking straight
+// into Supabase's connection limit under any real use.
+let pgPool: Awaited<ReturnType<typeof makePool>> | null = null
 
-async function getPool() {
+async function makePool() {
   const { Pool } = await import('pg')
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized: false },
   })
+  pool.on('error', (err) => console.error('[pg] idle client error', err.message))
+  return pool
+}
+
+/*
+ * Two things that only show up against a real hosted database:
+ *
+ *  - If this first query fails, the rejected promise used to stay cached in
+ *    `pgReady` forever, so every later request rejected with the same stale
+ *    error. One blip while Supabase was waking up bricked the server until
+ *    someone redeployed it. Clearing it on failure lets the next request retry.
+ *  - A pool with no 'error' listener turns a dropped idle connection into an
+ *    unhandled 'error' event, which takes the whole process down. Supabase
+ *    closes idle connections routinely, so this is a matter of when.
+ */
+async function getPool() {
+  const pool = (pgPool ??= await makePool())
   if (!pgReady) {
     pgReady = pool
       .query(
@@ -38,13 +61,19 @@ async function getPool() {
         )`
       )
       .then(() => undefined)
+      .catch((err) => {
+        pgReady = null
+        throw err
+      })
   }
   await pgReady
   return pool
 }
 
 function rowToOrder(row: { id: string; created_at: Date; data: Record<string, unknown> }): CakeOrder {
-  return { ...(row.data as CakeOrder), id: row.id, createdAt: row.created_at.toISOString() }
+  // normalised on the way out too: a row written by an older version can be
+  // missing fields the reminder job reads without a guard.
+  return normalizeOrder({ ...row.data, id: row.id, createdAt: row.created_at.toISOString() })
 }
 
 const pgStore = {
@@ -60,9 +89,14 @@ const pgStore = {
   },
   async createOrder(input: NewOrder): Promise<CakeOrder> {
     const pool = await getPool()
-    const id = crypto.randomUUID()
-    const createdAt = new Date()
-    const data = { ...input, remindersSent: {} }
+    // never store a half-formed record — one bad row used to blank the whole app
+    const { id: wantId, createdAt: wantAt, ...clean } = normalizeOrder(input)
+    // A restore replays records that already have an id. Keeping it is what
+    // makes restoring the same file twice a no-op instead of a duplicate.
+    const free = wantId ? !(await pgStore.getOrder(wantId)) : false
+    const id = wantId && free ? wantId : crypto.randomUUID()
+    const createdAt = wantAt ? new Date(wantAt) : new Date()
+    const data = { ...clean, remindersSent: {} }
     await pool.query('insert into orders (id, created_at, data) values ($1, $2, $3)', [id, createdAt, data])
     return { ...(data as NewOrder & { remindersSent: {} }), id, createdAt: createdAt.toISOString() }
   },
@@ -71,7 +105,7 @@ const pgStore = {
     const existing = await pgStore.getOrder(id)
     if (!existing) return undefined
     const { id: _id, createdAt: _c, ...rest } = patch
-    const merged = { ...existing, ...rest }
+    const merged = normalizeOrder({ ...existing, ...rest })
     const { id: mid, createdAt: mCreatedAt, ...data } = merged
     await pool.query('update orders set data = $2 where id = $1', [id, data])
     return merged
@@ -82,7 +116,7 @@ const pgStore = {
     const { rowCount } = await pool.query('delete from orders where id = $1', [id])
     if (existing) {
       const { deleteUploadedFile } = await import('./storage.ts')
-      for (const url of existing.imageUrls) await deleteUploadedFile(url)
+      for (const url of existing.imageUrls ?? []) await deleteUploadedFile(url)
     }
     return (rowCount ?? 0) > 0
   },
@@ -117,10 +151,13 @@ const fileStore = {
   },
   async createOrder(input: NewOrder): Promise<CakeOrder> {
     const db = load()
+    const clean = normalizeOrder(input)
+    // keep a restored record's own id/date so re-running a restore adds nothing
+    const free = clean.id ? !db.orders.some((o) => o.id === clean.id) : false
     const order: CakeOrder = {
-      ...input,
-      id: crypto.randomUUID(),
-      createdAt: new Date().toISOString(),
+      ...clean,
+      id: clean.id && free ? clean.id : crypto.randomUUID(),
+      createdAt: clean.createdAt || new Date().toISOString(),
       remindersSent: {},
     }
     db.orders.push(order)
@@ -132,7 +169,8 @@ const fileStore = {
     const idx = db.orders.findIndex((o) => o.id === id)
     if (idx === -1) return undefined
     const { id: _id, createdAt: _c, ...rest } = patch
-    db.orders[idx] = { ...db.orders[idx], ...rest }
+    const prev = db.orders[idx]
+    db.orders[idx] = { ...normalizeOrder({ ...prev, ...rest }), id: prev.id, createdAt: prev.createdAt }
     save(db)
     return db.orders[idx]
   },
@@ -143,7 +181,7 @@ const fileStore = {
     db.orders = db.orders.filter((o) => o.id !== id)
     save(db)
     for (const o of removed) {
-      for (const url of o.imageUrls) {
+      for (const url of o.imageUrls ?? []) {
         const file = path.join(UPLOADS_DIR, path.basename(url))
         if (fs.existsSync(file)) fs.unlinkSync(file)
       }

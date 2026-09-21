@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CakeOrder, NewOrder } from './types'
 import { api } from './api'
 import { OrderForm } from './components/OrderForm'
@@ -26,6 +26,9 @@ const VIEWS: Array<{ value: View; label: string; sub: string }> = [
   { value: 'business', label: 'Business', sub: 'Business' },
 ]
 
+/** Whatever went wrong, as a sentence rather than an object. */
+const msg = (err: unknown) => (err instanceof Error ? err.message : String(err))
+
 /** A repeat order keeps the cake, drops anything tied to the last occasion. */
 function prefillFrom(o: CakeOrder): CakeOrder {
   return {
@@ -51,10 +54,46 @@ export default function App() {
   const [toast, setToast] = useState('')
   const [view, setView] = useState<View>('orders')
   const [planMode, setPlanMode] = useState<'month' | 'plan'>('month')
+  /*
+   * Orders with a save in flight. "Picked up" and "Mark paid" only change on
+   * the server, so on a slow connection nothing happens for a second or two —
+   * a second impatient tap would toggle "Picked up" straight back off again.
+   */
+  const [busy, setBusy] = useState<ReadonlySet<string>>(new Set())
+  /*
+   * The same set in a ref. Reading it from state meant reading the value
+   * captured at render time, so two taps landing before React re-rendered both
+   * saw it empty and both went through — the exact case this exists to stop.
+   */
+  const busyRef = useRef<Set<string>>(new Set())
+  /** set when the order list can't be loaded at all */
+  const [loadError, setLoadError] = useState('')
+
+  const runOnce = async (id: string, fn: () => Promise<unknown>) => {
+    if (busyRef.current.has(id)) return
+    busyRef.current.add(id)
+    setBusy(new Set(busyRef.current))
+    try {
+      await fn()
+    } catch (err) {
+      // these all save on the server; failing silently looked like nothing
+      // happened at all, and she would just tap again
+      showToast(`Couldn't save — ${msg(err)}`)
+    } finally {
+      busyRef.current.delete(id)
+      setBusy(new Set(busyRef.current))
+    }
+  }
 
   const refresh = useCallback(async () => {
     try {
       setOrders(await api.listOrders())
+      setLoadError('')
+    } catch (err) {
+      // Render's free tier sleeps and the first request can time out. Without
+      // this the app showed the cheerful "No cakes logged yet" empty state —
+      // as though every order had been deleted.
+      setLoadError(msg(err))
     } finally {
       setLoading(false)
     }
@@ -64,9 +103,13 @@ export default function App() {
     void refresh()
   }, [refresh])
 
-  const showToast = (msg: string) => {
-    setToast(msg)
-    window.setTimeout(() => setToast(''), 3200)
+  // one timer, not one per toast — a second message used to inherit the first
+  // one's countdown and vanish almost immediately
+  const toastTimer = useRef(0)
+  const showToast = (message: string) => {
+    setToast(message)
+    window.clearTimeout(toastTimer.current)
+    toastTimer.current = window.setTimeout(() => setToast(''), 3200)
   }
 
   const closeForm = () => {
@@ -90,20 +133,22 @@ export default function App() {
   // Marking a cake picked up settles it: the balance is handed over at the
   // door, so it counts as paid. If it wasn't, "Mark unpaid" on the card puts
   // it back and it starts showing as overdue.
-  const handleComplete = async (order: CakeOrder) => {
-    const collecting = order.status !== 'completed'
-    await api.updateOrder(order.id, {
-      status: collecting ? 'completed' : 'upcoming',
-      balancePaid: collecting ? true : order.balancePaid,
+  const handleComplete = (order: CakeOrder) =>
+    runOnce(order.id, async () => {
+      const collecting = order.status !== 'completed'
+      await api.updateOrder(order.id, {
+        status: collecting ? 'completed' : 'upcoming',
+        balancePaid: collecting ? true : order.balancePaid,
+      })
+      await refresh()
     })
-    await refresh()
-  }
 
-  const handleTogglePaid = async (order: CakeOrder) => {
-    await api.updateOrder(order.id, { balancePaid: !order.balancePaid })
-    showToast(order.balancePaid ? 'Marked as still owing' : 'Marked as paid ✓')
-    await refresh()
-  }
+  const handleTogglePaid = (order: CakeOrder) =>
+    runOnce(order.id, async () => {
+      await api.updateOrder(order.id, { balancePaid: !order.balancePaid })
+      showToast(order.balancePaid ? 'Marked as still owing' : 'Marked as paid ✓')
+      await refresh()
+    })
 
   const handleDelete = async (order: CakeOrder) => {
     if (
@@ -112,16 +157,19 @@ export default function App() {
       )
     )
       return
-    await api.deleteOrder(order.id)
-    showToast('Order deleted')
-    await refresh()
+    await runOnce(order.id, async () => {
+      await api.deleteOrder(order.id)
+      showToast('Order deleted')
+      await refresh()
+    })
   }
 
-  const handleRemind = async (order: CakeOrder) => {
-    const res = await api.remindNow(order.id)
-    showToast(res.ok ? 'Reminder texted ✓' : `Not sent — ${res.detail}`)
-    await refresh()
-  }
+  const handleRemind = (order: CakeOrder) =>
+    runOnce(order.id, async () => {
+      const res = await api.remindNow(order.id)
+      showToast(res.ok ? 'Reminder texted ✓' : `Not sent — ${res.detail}`)
+      await refresh()
+    })
 
   const openEdit = (o: CakeOrder) => {
     setEditing(o)
@@ -214,7 +262,9 @@ export default function App() {
       </header>
 
       <main className="main">
-        {view === 'business' && <BusinessPage orders={orders} onToast={showToast} />}
+        {view === 'business' && (
+          <BusinessPage orders={orders} onToast={showToast} onOrdersChanged={refresh} />
+        )}
 
         {view === 'customers' && (
           <CustomersView orders={orders} onOpen={openEdit} onRepeat={openRepeat} />
@@ -302,6 +352,20 @@ export default function App() {
 
             {loading ? (
               <p className="empty">Loading orders…</p>
+            ) : loadError ? (
+              <div className="empty">
+                <span className="empty-mark" aria-hidden="true">
+                  ⚠
+                </span>
+                <p>
+                  Couldn't load your cakes — {loadError}.
+                  <br />
+                  Nothing has been lost; the app just can't reach the server right now.
+                </p>
+                <button className="btn btn-primary" onClick={() => void refresh()}>
+                  Try again
+                </button>
+              </div>
             ) : visible.length === 0 ? (
               <div className="empty">
                 <span className="empty-mark" aria-hidden="true">
@@ -326,6 +390,7 @@ export default function App() {
                     onRemind={() => void handleRemind(o)}
                     onRepeat={() => openRepeat(o)}
                     onTogglePaid={() => void handleTogglePaid(o)}
+                    busy={busy.has(o.id)}
                   />
                 ))}
               </div>

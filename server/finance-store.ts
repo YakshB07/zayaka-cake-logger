@@ -37,12 +37,25 @@ let pgPool: Awaited<ReturnType<typeof makePool>> | null = null
 
 async function makePool() {
   const { Pool } = await import('pg')
-  return new Pool({
+  const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized: false },
   })
+  pool.on('error', (err) => console.error('[pg] idle client error', err.message))
+  return pool
 }
 
+/*
+ * Two things that only show up against a real hosted database:
+ *
+ *  - If this first query fails, the rejected promise used to stay cached in
+ *    `pgReady` forever, so every later request rejected with the same stale
+ *    error. One blip while Supabase was waking up bricked the server until
+ *    someone redeployed it. Clearing it on failure lets the next request retry.
+ *  - A pool with no 'error' listener turns a dropped idle connection into an
+ *    unhandled 'error' event, which takes the whole process down. Supabase
+ *    closes idle connections routinely, so this is a matter of when.
+ */
 async function getPool() {
   const pool = (pgPool ??= await makePool())
   if (!pgReady) {
@@ -57,6 +70,10 @@ async function getPool() {
         create index if not exists finance_kind_idx on finance (kind);`
       )
       .then(() => undefined)
+      .catch((err) => {
+        pgReady = null
+        throw err
+      })
   }
   await pgReady
   return pool
@@ -77,9 +94,15 @@ const pgStore = {
   },
   async create(kind: FinanceKind, input: Record<string, unknown>): Promise<Row> {
     const pool = await getPool()
-    const id = crypto.randomUUID()
-    const createdAt = new Date()
-    const { id: _i, createdAt: _c, ...data } = input
+    const { id: wantId, createdAt: wantAt, ...data } = input
+    // a restore replays rows that already carry an id — keep it so a repeat
+    // restore is a no-op rather than a second copy
+    const free =
+      typeof wantId === 'string' && wantId
+        ? (await pool.query('select 1 from finance where id = $1', [wantId])).rowCount === 0
+        : false
+    const id = typeof wantId === 'string' && wantId && free ? wantId : crypto.randomUUID()
+    const createdAt = typeof wantAt === 'string' && wantAt ? new Date(wantAt) : new Date()
     await pool.query('insert into finance (id, kind, created_at, data) values ($1, $2, $3, $4)', [
       id,
       kind,
@@ -130,8 +153,16 @@ const fileStore = {
   },
   async create(kind: FinanceKind, input: Record<string, unknown>): Promise<Row> {
     const db = load()
-    const { id: _i, createdAt: _c, ...data } = input
-    const row: Row = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString() }
+    const { id: wantId, createdAt: wantAt, ...data } = input
+    const taken =
+      typeof wantId === 'string' && wantId
+        ? FINANCE_KINDS.some((k) => (db[k] as Row[]).some((r) => r.id === wantId))
+        : true
+    const row: Row = {
+      ...data,
+      id: typeof wantId === 'string' && wantId && !taken ? wantId : crypto.randomUUID(),
+      createdAt: typeof wantAt === 'string' && wantAt ? wantAt : new Date().toISOString(),
+    }
     ;(db[kind] as Row[]).push(row)
     save(db)
     return row

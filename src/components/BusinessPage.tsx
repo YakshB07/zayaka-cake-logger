@@ -68,7 +68,16 @@ type Sheet =
   | { kind: 'income'; item?: OtherIncome }
   | null
 
-export function BusinessPage({ orders, onToast }: { orders: CakeOrder[]; onToast: (m: string) => void }) {
+export function BusinessPage({
+  orders,
+  onToast,
+  onOrdersChanged,
+}: {
+  orders: CakeOrder[]
+  onToast: (m: string) => void
+  /** reload the app's order list — a restore can add cakes, not just costs */
+  onOrdersChanged: () => Promise<void>
+}) {
   const mode = useColorScheme()
   const c = roles(mode)
 
@@ -79,9 +88,17 @@ export function BusinessPage({ orders, onToast }: { orders: CakeOrder[]; onToast
   const [customYear, setCustomYear] = useState('')
   const [sheet, setSheet] = useState<Sheet>(null)
 
+  const [loadError, setLoadError] = useState('')
+
   const refresh = useCallback(async () => {
     try {
       setFin(await api.loadFinance())
+      setLoadError('')
+    } catch (err) {
+      // Every figure on this page is derived from `fin`. Swallowing the error
+      // left it as EMPTY, so a failed load rendered a complete dashboard of
+      // zeroes — which reads as "the business made nothing", not "try again".
+      setLoadError(err instanceof Error ? err.message : String(err))
     } finally {
       setLoading(false)
     }
@@ -121,10 +138,21 @@ export function BusinessPage({ orders, onToast }: { orders: CakeOrder[]; onToast
 
   // ── saving ──
   const save = async (fn: () => Promise<unknown>, msg: string) => {
+    // deliberately not caught: the sheet that called this shows the message
+    // inline, next to the form the owner is still looking at
     await fn()
     await refresh()
     onToast(msg)
     setSheet(null)
+  }
+
+  /** For buttons with nowhere to put an inline error — say it in the toast. */
+  const tryAction = async (fn: () => Promise<unknown>) => {
+    try {
+      await fn()
+    } catch (err) {
+      onToast(`Didn't work — ${err instanceof Error ? err.message : String(err)}`)
+    }
   }
 
   // Settings live as a single row; create it the first time something is saved.
@@ -142,18 +170,21 @@ export function BusinessPage({ orders, onToast }: { orders: CakeOrder[]; onToast
     return created as CostCategory
   }
 
-  const addStarters = async () => {
-    for (const name of STARTER_CATEGORIES) {
-      await api.createFinance('categories', { name, archived: false })
-    }
-    await refresh()
-    onToast('Categories added — rename any of them ✓')
-  }
+  const addStarters = () =>
+    tryAction(async () => {
+      for (const name of STARTER_CATEGORIES) {
+        await api.createFinance('categories', { name, archived: false })
+      }
+      await refresh()
+      onToast('Categories added — rename any of them ✓')
+    })
 
   const deleteCategory = async (cat: CostCategory) => {
     if (!window.confirm(`Delete the "${cat.name}" category?`)) return
-    await api.deleteFinance('categories', cat.id)
-    await refresh()
+    await tryAction(async () => {
+      await api.deleteFinance('categories', cat.id)
+      await refresh()
+    })
   }
 
   // ── derived display bits ──
@@ -184,6 +215,24 @@ export function BusinessPage({ orders, onToast }: { orders: CakeOrder[]; onToast
   const hasCakeCosts = summary.variableCosts > 0 && summary.orderCount > 0
 
   if (loading) return <p className="empty">Loading your numbers…</p>
+
+  if (loadError)
+    return (
+      <div className="empty">
+        <span className="empty-mark" aria-hidden="true">
+          ⚠
+        </span>
+        <p>
+          Couldn't load your numbers — {loadError}.
+          <br />
+          Nothing has been lost. These figures live on the server, so they'll be back as soon as it
+          answers.
+        </p>
+        <button className="btn btn-primary" onClick={() => void refresh()}>
+          Try again
+        </button>
+      </div>
+    )
 
   return (
     <div className="business">
@@ -674,7 +723,16 @@ export function BusinessPage({ orders, onToast }: { orders: CakeOrder[]; onToast
         </div>
       </section>
 
-      <BackupCard orders={orders} fin={fin} onDone={refresh} onToast={onToast} />
+      <BackupCard
+        orders={orders}
+        fin={fin}
+        onDone={async () => {
+          // a restore brings back cakes as well as costs, and the list it
+          // de-duplicates against has to be the refreshed one
+          await Promise.all([refresh(), onOrdersChanged()])
+        }}
+        onToast={onToast}
+      />
 
       {/* ── sheets ── */}
       {sheet?.kind === 'expense' && (

@@ -3,19 +3,35 @@ export function todayYmd(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-/** Whole days from today until the given YYYY-MM-DD (negative = past). */
-export function daysUntil(ymd: string): number {
+/**
+ * Parses YYYY-MM-DD into a local Date, or null when it isn't one.
+ *
+ * A blank or broken date used to flow straight through: `''.split('-')` gives
+ * [NaN], and the card then rendered "In NaN days" over "INVALID DATE".
+ */
+function parseYmd(ymd: string): Date | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd ?? '')) return null
   const [y, m, d] = ymd.split('-').map(Number)
-  const target = new Date(y, m - 1, d)
+  const dt = new Date(y, m - 1, d)
+  if (Number.isNaN(dt.getTime())) return null
+  // "2026-13-45" is well-formed but not a date — JS would roll it forward to
+  // Feb 2027 and show that instead, which is worse than showing nothing.
+  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d ? dt : null
+}
+
+/** Whole days from today until the given YYYY-MM-DD (NaN when there is no date). */
+export function daysUntil(ymd: string): number {
+  const target = parseYmd(ymd)
+  if (!target) return NaN
   const now = new Date()
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   return Math.round((target.getTime() - today.getTime()) / 86_400_000)
 }
 
 export function formatDate(ymd: string): string {
-  if (!ymd) return ''
-  const [y, m, d] = ymd.split('-').map(Number)
-  return new Date(y, m - 1, d).toLocaleDateString('en-CA', {
+  const dt = parseYmd(ymd)
+  if (!dt) return 'No date set'
+  return dt.toLocaleDateString('en-CA', {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
@@ -24,17 +40,17 @@ export function formatDate(ymd: string): string {
 }
 
 export function dateParts(ymd: string): { month: string; day: string; weekday: string } {
-  const [y, m, d] = ymd.split('-').map(Number)
-  const dt = new Date(y, m - 1, d)
+  const dt = parseYmd(ymd)
+  if (!dt) return { month: '--', day: '?', weekday: 'No pickup date set' }
   return {
     month: dt.toLocaleDateString('en-CA', { month: 'short' }).toUpperCase(),
-    day: String(d),
+    day: String(dt.getDate()),
     weekday: dt.toLocaleDateString('en-CA', { weekday: 'long' }),
   }
 }
 
 export function formatTime(hhmm: string): string {
-  if (!hhmm) return ''
+  if (!/^\d{1,2}:\d{2}$/.test(hhmm ?? '')) return ''
   const [h, m] = hhmm.split(':').map(Number)
   const ampm = h >= 12 ? 'PM' : 'AM'
   const h12 = h % 12 === 0 ? 12 : h % 12
@@ -43,6 +59,7 @@ export function formatTime(hhmm: string): string {
 
 export function countdownLabel(ymd: string): { text: string; tone: 'today' | 'soon' | 'later' | 'past' } {
   const n = daysUntil(ymd)
+  if (Number.isNaN(n)) return { text: 'No date', tone: 'later' }
   if (n < 0) return { text: `${-n}d ago`, tone: 'past' }
   if (n === 0) return { text: 'Today', tone: 'today' }
   if (n === 1) return { text: 'Tomorrow', tone: 'soon' }
@@ -51,10 +68,14 @@ export function countdownLabel(ymd: string): { text: string; tone: 'today' | 'so
 }
 
 export function money(n: number): string {
-  // thousands separated, cents only when they mean something ($1,220 not $1220)
+  // a NaN anywhere upstream used to surface to her as the literal text "$NaN"
+  if (!Number.isFinite(n)) n = 0
+  // thousands separated, cents only when they mean something ($1,220 not $1220),
+  // and the sign outside the dollar sign ("-$50", never "$-50")
   const whole = n % 1 === 0
-  return `$${n.toLocaleString('en-CA', {
+  const body = Math.abs(n).toLocaleString('en-CA', {
     minimumFractionDigits: whole ? 0 : 2,
     maximumFractionDigits: whole ? 0 : 2,
-  })}`
+  })
+  return `${n < 0 ? '-' : ''}$${body}`
 }

@@ -158,7 +158,7 @@ export function ExpenseSheet({
       setCategoryId(created.id)
       setNewCat('')
     } catch (err) {
-      setError(`Couldn't add that category — ${String(err)}`)
+      setError(`Couldn't add that category — ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setAddingCat(false)
     }
@@ -172,7 +172,7 @@ export function ExpenseSheet({
     try {
       await onSave({ date, amount: amountNum, categoryId, vendor: vendor.trim(), note: note.trim(), orderId })
     } catch (err) {
-      setError(`Couldn't save — ${String(err)}`)
+      setError(`Couldn't save — ${err instanceof Error ? err.message : String(err)}`)
       setSaving(false)
     }
   }
@@ -331,7 +331,7 @@ export function FixedCostSheet({
         notes: notes.trim(),
       })
     } catch (err) {
-      setError(`Couldn't save — ${String(err)}`)
+      setError(`Couldn't save — ${err instanceof Error ? err.message : String(err)}`)
       setSaving(false)
     }
   }
@@ -453,7 +453,7 @@ export function IncomeSheet({
     try {
       await onSave({ date, amount: amountNum, source: source.trim(), note: note.trim() })
     } catch (err) {
-      setError(`Couldn't save — ${String(err)}`)
+      setError(`Couldn't save — ${err instanceof Error ? err.message : String(err)}`)
       setSaving(false)
     }
   }

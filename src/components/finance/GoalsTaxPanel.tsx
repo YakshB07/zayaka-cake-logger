@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { CakeOrder, FinanceData, Settings } from '../../types'
 import { DEFAULT_SETTINGS } from '../../types'
 import { monthsInRange, summarise, type Range } from '../../finance/analytics'
@@ -48,16 +48,25 @@ export function GoalsCard({
   }
   const anyGoal = goals.revenue > 0 || goals.profit > 0 || goals.cakes > 0
 
+  const [error, setError] = useState('')
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
-    await onSave({
-      revenueGoal: Number(revenueGoal) || 0,
-      profitGoal: Number(profitGoal) || 0,
-      cakesGoal: Number(cakesGoal) || 0,
-    })
-    setSaving(false)
-    setEditing(false)
+    setError('')
+    try {
+      await onSave({
+        revenueGoal: Number(revenueGoal) || 0,
+        profitGoal: Number(profitGoal) || 0,
+        cakesGoal: Number(cakesGoal) || 0,
+      })
+      setEditing(false)
+    } catch (err) {
+      // without this the button sat on "Saving…" forever, disabled
+      setError(`Couldn't save — ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -124,6 +133,11 @@ export function GoalsCard({
               />
             </label>
           </div>
+          {error && (
+            <p className="form-error" role="alert">
+              {error}
+            </p>
+          )}
           <div className="sheet-actions">
             <button type="button" className="btn btn-quiet" onClick={() => setEditing(false)}>
               Cancel
@@ -232,9 +246,36 @@ export function TaxCard({
   settings: Settings | undefined
   onSave: (patch: Partial<Settings>) => Promise<void>
 }) {
-  const tax = estimateTax(orders, fin, range, settings)
-  const registered = settings?.hstRegistered ?? DEFAULT_SETTINGS.hstRegistered
-  const inclusive = settings?.pricesIncludeTax ?? DEFAULT_SETTINGS.pricesIncludeTax
+  const savedRegistered = settings?.hstRegistered ?? DEFAULT_SETTINGS.hstRegistered
+  const savedInclusive = settings?.pricesIncludeTax ?? DEFAULT_SETTINGS.pricesIncludeTax
+
+  /*
+   * These tick immediately and save in the background. As plain controlled
+   * inputs bound to the server value they snapped back to the old state until
+   * the round-trip finished — fine on localhost, but on a free host that takes
+   * half a minute to wake it looks broken and invites a second tap.
+   */
+  const [registered, setRegistered] = useState(savedRegistered)
+  const [inclusive, setInclusive] = useState(savedInclusive)
+  useEffect(() => setRegistered(savedRegistered), [savedRegistered])
+  useEffect(() => setInclusive(savedInclusive), [savedInclusive])
+
+  /*
+   * If the save fails, put the tick back. Otherwise the box stays in the new
+   * position while the server keeps the old one — and because the effects
+   * above only fire when the *saved* value changes, nothing ever corrects it.
+   * Every tax figure on this card would then be computed from a setting that
+   * was never actually saved.
+   */
+  const applySetting = async (patch: Partial<Settings>, revert: () => void) => {
+    try {
+      await onSave(patch)
+    } catch {
+      revert()
+    }
+  }
+
+  const tax = estimateTax(orders, fin, range, { ...(settings ?? DEFAULT_SETTINGS), hstRegistered: registered, pricesIncludeTax: inclusive } as Settings)
   const year = Number(range.to.slice(0, 4))
 
   return (
@@ -282,7 +323,11 @@ export function TaxCard({
           <input
             type="checkbox"
             checked={registered}
-            onChange={(e) => void onSave({ hstRegistered: e.target.checked })}
+            onChange={(e) => {
+              const next = e.target.checked
+              setRegistered(next)
+              void applySetting({ hstRegistered: next }, () => setRegistered(!next))
+            }}
           />
           <span>I'm registered to charge HST</span>
         </label>
@@ -291,7 +336,11 @@ export function TaxCard({
             <input
               type="checkbox"
               checked={inclusive}
-              onChange={(e) => void onSave({ pricesIncludeTax: e.target.checked })}
+              onChange={(e) => {
+                const next = e.target.checked
+                setInclusive(next)
+                void applySetting({ pricesIncludeTax: next }, () => setInclusive(!next))
+              }}
             />
             <span>
               My cake prices already include the tax

@@ -97,10 +97,15 @@ export function addMonths(ym: string, n: number): string {
 }
 
 /** every YYYY-MM the range touches, in order */
+const isYm = (v: string) => /^\d{4}-(0[1-9]|1[0-2])$/.test(v)
+
 export function monthsInRange(range: Range): string[] {
   const out: string[] = []
   let cur = ymOf(range.from)
   const last = ymOf(range.to)
+  // A range of pure nonsense used to return 600 entries of "NaN-NaN", which
+  // then got charged fixed costs and drawn as 600 bars.
+  if (!isYm(cur) || !isYm(last)) return []
   // guard so a malformed range can never spin forever
   for (let i = 0; i < 600 && cur && cur <= last; i++) {
     out.push(cur)
@@ -516,8 +521,10 @@ export function allTimeRange(orders: CakeOrder[], fin: FinanceData): Range {
   ].filter(Boolean)
   const today = ymd(new Date())
   if (!dates.length) return { from: `${new Date().getFullYear()}-01-01`, to: today, label: 'All time' }
-  const from = dates.reduce((a, b) => (a < b ? a : b))
-  return { from, to: today, label: 'All time' }
+  // A brand-new bakery may have nothing but future bookings, which would put
+  // `from` after `to` and make every total silently read zero. Never invert.
+  const earliest = dates.reduce((a, b) => (a < b ? a : b))
+  return { from: earliest < today ? earliest : today, to: today, label: 'All time' }
 }
 
 /**
@@ -530,18 +537,38 @@ export function allTimeRange(orders: CakeOrder[], fin: FinanceData): Range {
  */
 export function previousRange(range: Range): Range {
   const startYm = ymOf(range.from)
-  const isWholeMonth =
-    range.from === `${startYm}-01` &&
-    range.to === `${startYm}-${pad(daysInMonth(startYm))}` &&
-    startYm === ymOf(range.to)
-  if (isWholeMonth) {
+  const endYm = ymOf(range.to)
+  const startsMonth = range.from === `${startYm}-01`
+  const endDay = Number(range.to.slice(8))
+
+  /*
+   * A month or year that includes today is cut short at today by capToToday,
+   * so "this month" is Sep 1–21, not Sep 1–30. That used to miss the
+   * whole-month test below and fall through to the equal-span branch, which
+   * compares against the 21 days *ending* the day before — Aug 11–31 rather
+   * than August. "This year" was worse: Jan–Sep 2026 was compared against
+   * Apr–Dec 2025. Since "This year" is the default view, the headline "vs
+   * previous period" figure on the dashboard was measured against the wrong
+   * window every time. A part-period now compares against the same stretch of
+   * the period before it — the year-to-date against the same point last year.
+   */
+  if (startsMonth && startYm === endYm) {
     const prev = addMonths(startYm, -1)
-    return { from: `${prev}-01`, to: `${prev}-${pad(daysInMonth(prev))}`, label: 'previous month' }
+    const prevLen = daysInMonth(prev)
+    // a whole month pairs with a whole month; a part-month with the same days
+    const to = endDay >= daysInMonth(startYm) ? prevLen : Math.min(endDay, prevLen)
+    return { from: `${prev}-01`, to: `${prev}-${pad(to)}`, label: 'previous month' }
   }
 
   const year = Number(range.from.slice(0, 4))
-  if (range.from === `${year}-01-01` && range.to === `${year}-12-31`) {
-    return { from: `${year - 1}-01-01`, to: `${year - 1}-12-31`, label: 'previous year' }
+  if (range.from === `${year}-01-01` && Number(range.to.slice(0, 4)) === year) {
+    const last = year - 1
+    const isWholeYear = range.to === `${year}-12-31`
+    if (isWholeYear) return { from: `${last}-01-01`, to: `${last}-12-31`, label: 'previous year' }
+    // same point in last year — clamped, so Feb 29 doesn't become Mar 1
+    const em = Number(range.to.slice(5, 7))
+    const to = Math.min(endDay, daysInMonth(`${last}-${pad(em)}`))
+    return { from: `${last}-01-01`, to: `${last}-${pad(em)}-${pad(to)}`, label: 'previous year' }
   }
 
   const from = new Date(range.from + 'T00:00:00')

@@ -13,9 +13,19 @@ import {
   type Range,
 } from './analytics'
 
-/** Escape one cell for CSV — quotes doubled, anything risky wrapped. */
+/**
+ * Escape one cell for CSV — quotes doubled, anything risky wrapped.
+ *
+ * Also guards against spreadsheet formula injection: Excel and Sheets execute a
+ * cell that opens with = + - or @, so a customer name or design note reading
+ * "=HYPERLINK(...)" would run when the export is opened. Those get a leading
+ * apostrophe, which spreadsheets read as "treat this as text". Genuine numbers
+ * (negatives like -50.00 included) are left exactly as they are.
+ */
 function cell(v: string | number): string {
-  const s = String(v ?? '')
+  const raw = String(v ?? '')
+  const isNumber = /^-?\d+(\.\d+)?$/.test(raw)
+  const s = !isNumber && /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
 

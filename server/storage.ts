@@ -11,8 +11,18 @@ const BUCKET = encodeURIComponent(process.env.SUPABASE_BUCKET ?? 'cake-photos')
 
 const useSupabase = Boolean(SUPABASE_URL && SUPABASE_SERVICE_KEY)
 
+/*
+ * Uploads are served back from /uploads by express.static, which sets the
+ * Content-Type from the file extension. The extension came straight off the
+ * uploaded filename, so a file named `cake.html` (or .svg) sent with an image
+ * MIME type would be served as a document on the app's own origin — stored
+ * XSS. Only these extensions are ever written; anything else becomes .jpg.
+ */
+const SAFE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.heic', '.heif', '.avif'])
+
 function filenameFor(originalname: string): string {
-  const ext = path.extname(originalname).toLowerCase() || '.jpg'
+  const raw = path.extname(path.basename(originalname || '')).toLowerCase()
+  const ext = SAFE_EXT.has(raw) ? raw : '.jpg'
   return `${Date.now()}-${crypto.randomUUID().slice(0, 8)}${ext}`
 }
 

@@ -100,7 +100,7 @@ export function OrderForm({ initial, isEdit = Boolean(initial), onSave, onCancel
         status: isEdit ? (initial?.status ?? 'upcoming') : 'upcoming',
       })
     } catch (err) {
-      setError(`Couldn't save — ${String(err)}`)
+      setError(`Couldn't save — ${err instanceof Error ? err.message : String(err)}`)
       setSaving(false)
     }
   }

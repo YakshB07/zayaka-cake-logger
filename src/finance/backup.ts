@@ -87,18 +87,20 @@ export async function restoreBackup(
   let done = 0
   const tick = () => onProgress?.(++done, total)
 
+  // The id and createdAt are sent through deliberately: the server keeps them
+  // when they're free, which is what makes restoring the same file twice add
+  // nothing the second time instead of duplicating every record.
   let orders = 0
   for (const o of orderJobs) {
-    const { id: _i, createdAt: _c, remindersSent: _r, ...rest } = o
-    await api.createOrder(rest)
+    const { remindersSent: _r, ...rest } = o
+    await api.createOrder(rest as unknown as Parameters<typeof api.createOrder>[0])
     orders++
     tick()
   }
 
   let finance = 0
   for (const job of financeJobs) {
-    const { id: _i, createdAt: _c, ...rest } = job.row as unknown as Record<string, unknown>
-    await api.createFinance(job.kind, rest)
+    await api.createFinance(job.kind, job.row)
     finance++
     tick()
   }

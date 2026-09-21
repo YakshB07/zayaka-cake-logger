@@ -38,19 +38,27 @@ export function buildProfiles(orders: CakeOrder[]): CustomerProfile[] {
 
   return [...map.entries()]
     .map(([key, list]) => {
-      const sorted = [...list].sort((a, b) => a.pickupDate.localeCompare(b.pickupDate))
+      // oldest first; `newest` is the same orders the other way round
+      const oldestFirst = [...list].sort((a, b) => a.pickupDate.localeCompare(b.pickupDate))
+      const newestFirst = [...oldestFirst].reverse()
       const total = list.reduce((s, o) => s + (Number(o.price) || 0), 0)
+      /*
+       * These used to read off one array that was reversed in place partway
+       * through this literal, so first/last were only correct because of the
+       * order the properties happened to be written in. Two named arrays
+       * instead — moving a line can't silently swap a customer's dates.
+       */
       return {
         key,
         // use their most recent spelling of their own name
-        name: sorted[sorted.length - 1].customerName.trim(),
+        name: newestFirst[0].customerName.trim(),
         phone: commonest(list.map((o) => o.customerPhone.trim())),
-        orders: sorted.reverse(),
+        orders: newestFirst,
         total,
         count: list.length,
         avg: total / list.length,
-        firstDate: sorted[sorted.length - 1].pickupDate,
-        lastDate: sorted[0].pickupDate,
+        firstDate: oldestFirst[0].pickupDate,
+        lastDate: newestFirst[0].pickupDate,
         topFlavour: commonest(list.map((o) => o.flavour)),
         topSize: commonest(list.map((o) => o.size)),
         owed: list

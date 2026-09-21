@@ -40,17 +40,33 @@ self.addEventListener('activate', (event) => {
   )
 })
 
-function timedFetch(request, ms) {
+/*
+ * Race the network against a timer — but keep the real request alive when the
+ * timer wins, and hand the eventual response to `onLate`.
+ *
+ * This matters on Render's free tier. A sleeping server takes ~30s to wake, so
+ * the 4s timeout fires and we serve the cached page. The in-flight response
+ * used to be thrown away, which meant the cache still held the OLD build after
+ * a deploy — and it stayed that way on every visit that hit a cold server, so
+ * new features looked like they never shipped. Now the late response refreshes
+ * the cache in the background and the next load is current.
+ */
+function timedFetch(request, ms, onLate) {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('slow')), ms)
+    let settled = false
+    const timer = setTimeout(() => {
+      settled = true
+      reject(new Error('slow'))
+    }, ms)
     fetch(request).then(
       (res) => {
         clearTimeout(timer)
-        resolve(res)
+        if (settled) onLate && onLate(res)
+        else resolve(res)
       },
       (err) => {
         clearTimeout(timer)
-        reject(err)
+        if (!settled) reject(err)
       }
     )
   })
@@ -65,11 +81,15 @@ self.addEventListener('fetch', (event) => {
 
   // ── app shell: network-first so a fresh deploy is picked up ──
   if (request.mode === 'navigate') {
+    const keep = (res) => {
+      if (!res || !res.ok) return
+      const copy = res.clone()
+      caches.open(SHELL).then((c) => c.put('/', copy))
+    }
     event.respondWith(
-      timedFetch(request, NET_TIMEOUT)
+      timedFetch(request, NET_TIMEOUT, keep)
         .then((res) => {
-          const copy = res.clone()
-          caches.open(SHELL).then((c) => c.put('/', copy))
+          keep(res)
           return res
         })
         .catch(() => caches.match('/').then((r) => r || caches.match(request)))
@@ -95,13 +115,15 @@ self.addEventListener('fetch', (event) => {
 
   // ── API reads and uploaded photos: network-first, cache as a safety net ──
   if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/uploads/')) {
+    const keep = (res) => {
+      if (!res || !res.ok) return
+      const copy = res.clone()
+      caches.open(DATA).then((c) => c.put(request, copy))
+    }
     event.respondWith(
-      timedFetch(request, NET_TIMEOUT)
+      timedFetch(request, NET_TIMEOUT, keep)
         .then((res) => {
-          if (res.ok) {
-            const copy = res.clone()
-            caches.open(DATA).then((c) => c.put(request, copy))
-          }
+          keep(res)
           return res
         })
         .catch(() => caches.match(request).then((hit) => hit || Promise.reject(new Error('offline'))))

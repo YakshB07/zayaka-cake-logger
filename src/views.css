@@ -1029,3 +1029,63 @@
     content: '';
   }
 }
+
+/* ── crash screen (ErrorBoundary) ── */
+
+.crash {
+  max-width: 34rem;
+  margin: 12vh auto;
+  padding: 0 24px;
+  text-align: center;
+  color: var(--text);
+}
+
+.crash-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--warn-tint);
+  color: var(--warn);
+  font-size: 24px;
+  margin-bottom: 14px;
+}
+
+.crash h1 {
+  margin: 0 0 8px;
+  font-family: var(--font-brand);
+  font-size: 26px;
+  font-weight: 400;
+}
+
+.crash p {
+  margin: 0 0 20px;
+  color: var(--text-2);
+  line-height: 1.55;
+}
+
+.crash-actions {
+  margin-bottom: 22px;
+}
+
+.crash details {
+  text-align: left;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.crash summary {
+  cursor: pointer;
+  padding: 6px 0;
+}
+
+.crash pre {
+  overflow-x: auto;
+  background: var(--surface-2);
+  border-radius: var(--r-control);
+  padding: 11px 13px;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
