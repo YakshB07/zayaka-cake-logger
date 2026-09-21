@@ -89,11 +89,40 @@ export interface OtherIncome {
   note: string
 }
 
+/**
+ * One-row collection holding the owner's own preferences — goals and tax
+ * settings. Kept as a collection so it reuses the same store and API as
+ * everything else; the app always reads/writes the first row.
+ */
+export interface Settings {
+  id: string
+  createdAt: string
+  /** what she wants to make in a month, 0 = not set */
+  revenueGoal: number
+  profitGoal: number
+  cakesGoal: number
+  /** registered to charge HST? Ontario is 13%. */
+  hstRegistered: boolean
+  hstRate: number
+  /** prices already include tax (most home bakeries) vs added on top */
+  pricesIncludeTax: boolean
+}
+
 export interface FinanceData {
   fixedCosts: FixedCost[]
   categories: CostCategory[]
   expenses: Expense[]
   income: OtherIncome[]
+  settings: Settings[]
+}
+
+export const DEFAULT_SETTINGS: Omit<Settings, 'id' | 'createdAt'> = {
+  revenueGoal: 0,
+  profitGoal: 0,
+  cakesGoal: 0,
+  hstRegistered: false,
+  hstRate: 0.13,
+  pricesIncludeTax: true,
 }
 
 export type FinanceKind = keyof FinanceData

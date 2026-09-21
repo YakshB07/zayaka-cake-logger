@@ -9,7 +9,9 @@ import type {
   NewFixedCost,
   NewOtherIncome,
   OtherIncome,
+  Settings,
 } from '../types'
+import { DEFAULT_SETTINGS } from '../types'
 import { api } from '../api'
 import {
   activeYears,
@@ -46,10 +48,11 @@ import {
   useColorScheme,
 } from './charts'
 import { CostsPanel, STARTER_CATEGORIES } from './finance/CostsPanel'
+import { BackupCard, GoalsCard, TaxCard } from './finance/GoalsTaxPanel'
 import { ExpenseSheet, FixedCostSheet, IncomeSheet } from './finance/FinanceSheets'
 import { todayYmd } from '../dates'
 
-const EMPTY: FinanceData = { fixedCosts: [], categories: [], expenses: [], income: [] }
+const EMPTY: FinanceData = { fixedCosts: [], categories: [], expenses: [], income: [], settings: [] }
 
 const PRESETS = [
   { value: 'thisMonth', label: 'This month' },
@@ -122,6 +125,15 @@ export function BusinessPage({ orders, onToast }: { orders: CakeOrder[]; onToast
     await refresh()
     onToast(msg)
     setSheet(null)
+  }
+
+  // Settings live as a single row; create it the first time something is saved.
+  const settings = fin.settings[0]
+
+  const saveSettings = async (patch: Partial<Settings>) => {
+    if (settings) await api.updateFinance('settings', settings.id, patch)
+    else await api.createFinance('settings', { ...DEFAULT_SETTINGS, ...patch })
+    await refresh()
   }
 
   const createCategory = async (name: string): Promise<CostCategory> => {
@@ -304,6 +316,16 @@ export function BusinessPage({ orders, onToast }: { orders: CakeOrder[]; onToast
           ))}
         </ul>
       </section>
+
+      {/* ── goals ── */}
+      <GoalsCard
+        orders={orders}
+        fin={fin}
+        range={range}
+        settings={settings}
+        onSave={saveSettings}
+        colors={{ profit: c.profit, costs: c.costs, revenue: c.revenue }}
+      />
 
       {/* ── charts ── */}
       <div className="chart-grid">
@@ -540,6 +562,9 @@ export function BusinessPage({ orders, onToast }: { orders: CakeOrder[]; onToast
         onAddStarters={addStarters}
       />
 
+      {/* ── tax ── */}
+      <TaxCard orders={orders} fin={fin} range={range} settings={settings} onSave={saveSettings} />
+
       {/* ── export ── */}
       <section className="export-card">
         <h2 className="section-label">Take your numbers with you</h2>
@@ -609,6 +634,8 @@ export function BusinessPage({ orders, onToast }: { orders: CakeOrder[]; onToast
           </div>
         </div>
       </section>
+
+      <BackupCard orders={orders} fin={fin} onDone={refresh} onToast={onToast} />
 
       {/* ── sheets ── */}
       {sheet?.kind === 'expense' && (

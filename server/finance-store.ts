@@ -8,14 +8,20 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DATA_DIR = path.join(__dirname, 'data')
 const DB_FILE = path.join(DATA_DIR, 'finance.json')
 
-export const FINANCE_KINDS: FinanceKind[] = ['fixedCosts', 'categories', 'expenses', 'income']
+export const FINANCE_KINDS: FinanceKind[] = [
+  'fixedCosts',
+  'categories',
+  'expenses',
+  'income',
+  'settings',
+]
 
 export function isFinanceKind(v: string): v is FinanceKind {
   return (FINANCE_KINDS as string[]).includes(v)
 }
 
 function empty(): FinanceData {
-  return { fixedCosts: [], categories: [], expenses: [], income: [] }
+  return { fixedCosts: [], categories: [], expenses: [], income: [], settings: [] }
 }
 
 type Row = { id: string; createdAt: string; [k: string]: unknown }

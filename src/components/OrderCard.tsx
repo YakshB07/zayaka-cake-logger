@@ -8,9 +8,10 @@ interface Props {
   onComplete: () => void
   onDelete: () => void
   onRemind: () => void
+  onRepeat: () => void
 }
 
-export function OrderCard({ order, onEdit, onComplete, onDelete, onRemind }: Props) {
+export function OrderCard({ order, onEdit, onComplete, onDelete, onRemind, onRepeat }: Props) {
   const [lightbox, setLightbox] = useState<string | null>(null)
   const cd = countdownLabel(order.pickupDate)
   const dp = dateParts(order.pickupDate)
@@ -107,6 +108,13 @@ export function OrderCard({ order, onEdit, onComplete, onDelete, onRemind }: Pro
       <footer className="card-actions">
         <button className={`btn btn-small ${done ? 'btn-quiet' : 'btn-tint'}`} onClick={onComplete}>
           {done ? 'Undo pickup' : 'Picked up'}
+        </button>
+        <button
+          className="btn btn-small btn-quiet"
+          onClick={onRepeat}
+          title="Start a new order with the same cake, ready for a new date"
+        >
+          Repeat
         </button>
         <button className="btn btn-small btn-quiet" onClick={onEdit}>
           Edit

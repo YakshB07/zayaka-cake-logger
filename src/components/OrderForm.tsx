@@ -5,14 +5,17 @@ import { money, todayYmd } from '../dates'
 import { PhotoDropzone } from './PhotoDropzone'
 
 interface Props {
+  /** an existing order to edit, OR a partly filled template for a repeat */
   initial?: CakeOrder
+  /** true = editing that order; false = it's only a starting point */
+  isEdit?: boolean
   onSave: (order: NewOrder) => Promise<void>
   onCancel: () => void
 }
 
 const GROUPS = ['Classic', 'Signature', 'Exotic'] as const
 
-export function OrderForm({ initial, onSave, onCancel }: Props) {
+export function OrderForm({ initial, isEdit = Boolean(initial), onSave, onCancel }: Props) {
   const [customerName, setCustomerName] = useState(initial?.customerName ?? '')
   const [customerPhone, setCustomerPhone] = useState(initial?.customerPhone ?? '')
   const [tierCount, setTierCount] = useState(initial?.tierCount ?? 1)
@@ -97,7 +100,7 @@ export function OrderForm({ initial, onSave, onCancel }: Props) {
         cakeText: cakeText.trim(),
         designNotes: designNotes.trim(),
         imageUrls,
-        status: initial?.status ?? 'upcoming',
+        status: isEdit ? (initial?.status ?? 'upcoming') : 'upcoming',
       })
     } catch (err) {
       setError(`Couldn't save — ${String(err)}`)
@@ -107,9 +110,9 @@ export function OrderForm({ initial, onSave, onCancel }: Props) {
 
   return (
     <div className="sheet-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
-      <form className="sheet" onSubmit={submit} aria-label={initial ? 'Edit cake order' : 'New cake order'}>
+      <form className="sheet" onSubmit={submit} aria-label={isEdit ? 'Edit cake order' : 'New cake order'}>
         <header className="sheet-head">
-          <h2>{initial ? 'Edit Cake Order' : 'Log a Cake'}</h2>
+          <h2>{isEdit ? 'Edit Cake Order' : initial ? 'Log Another Cake' : 'Log a Cake'}</h2>
           <button type="button" className="btn-close" aria-label="Close" onClick={onCancel}>
             ×
           </button>

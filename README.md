@@ -10,6 +10,15 @@
     - **Text reminders** — 2 days before, 1 day before, and the morning of pickup, a reminder text goes to **226-961-0140** and **226-961-0150** with all the cake details. There's also a "Text now" button on every order.
     - **Dashboard** — upcoming cakes sorted by pickup, "coming up" alerts for the next 2 days, search, and one-tap "Mark picked up".
 
+    ## Calendar & planning
+
+    - **Month calendar** — every pickup on a grid, with a little workload bar so a heavy Saturday jumps out. Tap a day to see it in full, or to add a cake straight onto that date.
+    - **Bake plan** — the next week (or two) as a prep sheet: how many of each flavour and size to make, what to collect at pickup, and a tick box per cake. Hit **Print** and stick it on the fridge.
+
+    ## Customers
+
+    Everyone who's ever ordered, built automatically from the cake log — what they've spent in total, how many cakes, their usual flavour and size, when they last ordered, and anything they still owe. **Log another like their last one** starts a fresh order with the same cake ready for a new date. There's a **Repeat** button on every cake card too.
+
     ## The Business tab
 
     A full finance tracker sitting beside the cake log, built from the orders you're already entering.
@@ -23,6 +32,9 @@
     - **Break-even** — how many cakes a month you need to sell before a dollar is actually yours.
     - **Profit per cake** — put an ingredient cost on an order and you get profit and margin per cake, per flavour and per size.
     - **Export** — any period, a single month, a full year, or everything, as a spreadsheet that opens in Excel, Numbers or Google Sheets. One file with the summary, month-by-month, cost breakdown, every cake and every expense.
+    - **Monthly goals** — set what you'd like to make each month and track against it.
+    - **HST & tax time** — how close you are to the $30,000 small-supplier limit (and a warning as you approach it), and once you're registered, HST collected, HST already paid on purchases, and a quarter-by-quarter summary. Estimates to take to an accountant, not tax advice.
+    - **Backup** — save every cake and cost to one file, and put it back later. Restoring only adds what's missing, so it can never wipe what you already have.
 
     ### How the numbers are worked out
 
@@ -32,6 +44,10 @@
     2. **Profit = revenue − (logged spending + fixed bills).** The per-cake ingredient cost is deliberately *not* added on top, because the grocery run you log as spending is the same money and counting both would double it. Per-cake cost drives the profit-per-cake figures instead.
 
     Fixed bills are pro-rated by day at the edges of a period, so "Mar 15 → Apr 14" charges half of each month's rent rather than two full months.
+
+    ## Putting it on your phone
+
+    Open the site on your phone and choose **Add to Home Screen** (Share menu on iPhone, the ⋮ menu on Android). It gets its own icon and opens full-screen like a normal app, and the cakes you've already looked at stay readable if the signal drops in the kitchen.
 
     ## Running it
 

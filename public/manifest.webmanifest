@@ -1,0 +1,32 @@
+{
+  "name": "Zayaka Cake Logger",
+  "short_name": "Zayaka",
+  "description": "Log every custom cake, never miss a pickup, and see exactly how the business is doing.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f5f1ee",
+  "theme_color": "#e890a0",
+  "categories": ["business", "productivity", "food"],
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
