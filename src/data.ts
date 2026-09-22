@@ -1,15 +1,39 @@
 export interface SizeInfo {
+  /** the value stored on the order — short enough to read on a card */
   size: string
+  /** the big text on the chip */
+  label: string
+  /** the small text under it */
   serves: string
+  group: SizeGroup
 }
 
+/**
+ * Round layer cakes are sold by diameter and can be stacked into tiers. The
+ * large-format ones are single rectangular bakes sold by the tray, so they
+ * carry their dimensions in the name and never stack.
+ */
+export type SizeGroup = 'Round' | 'Large'
+
 export const SIZES: SizeInfo[] = [
-  { size: '4"', serves: 'Serves 4–6' },
-  { size: '6"', serves: 'Serves 8–10' },
-  { size: '8"', serves: 'Serves 15–20' },
-  { size: '10"', serves: 'Serves 25–30' },
-  { size: '12"', serves: 'Serves 35–40' },
+  { size: '4"', label: '4"', serves: 'Serves 4–6', group: 'Round' },
+  { size: '6"', label: '6"', serves: 'Serves 8–10', group: 'Round' },
+  { size: '8"', label: '8"', serves: 'Serves 15–20', group: 'Round' },
+  { size: '10"', label: '10"', serves: 'Serves 25–30', group: 'Round' },
+  { size: '12"', label: '12"', serves: 'Serves 35–40', group: 'Round' },
+  // Tall, sheet and slab as the bakery lists them. 12×9 and 18×6 are the same
+  // 108 square inches, so they serve the same number — the shape is the choice.
+  { size: 'Tall 18×9', label: 'Tall', serves: '18" × 9" · serves 40–50', group: 'Large' },
+  { size: 'Sheet 12×9', label: 'Sheet cake', serves: '12" × 9" · serves 25–30', group: 'Large' },
+  { size: 'Slab 18×6', label: 'Slab cake', serves: '18" × 6" · serves 25–30', group: 'Large' },
 ]
+
+/** Only these can be stacked, so only these appear in the per-tier pickers. */
+export const ROUND_SIZES = SIZES.filter((s) => s.group === 'Round')
+export const LARGE_SIZES = SIZES.filter((s) => s.group === 'Large')
+
+export const isRoundSize = (size: string): boolean =>
+  ROUND_SIZES.some((s) => s.size === size)
 
 export const SERVES_RANGE: Record<string, [number, number]> = {
   '4"': [4, 6],
@@ -17,6 +41,9 @@ export const SERVES_RANGE: Record<string, [number, number]> = {
   '8"': [15, 20],
   '10"': [25, 30],
   '12"': [35, 40],
+  'Tall 18×9': [40, 50],
+  'Sheet 12×9': [25, 30],
+  'Slab 18×6': [25, 30],
 }
 
 export const TIERS = [

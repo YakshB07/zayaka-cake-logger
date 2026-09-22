@@ -1,6 +1,16 @@
 import { useEffect, useState } from 'react'
 import type { CakeOrder, NewOrder, PaymentMethod } from '../types'
-import { FLAVOURS, PAYMENT_METHODS, SERVES_RANGE, SIZES, TIERS, TIER_DEFAULTS, TIER_NAMES } from '../data'
+import {
+  FLAVOURS,
+  LARGE_SIZES,
+  PAYMENT_METHODS,
+  ROUND_SIZES,
+  SERVES_RANGE,
+  TIERS,
+  TIER_DEFAULTS,
+  TIER_NAMES,
+  isRoundSize,
+} from '../data'
 import { money, todayYmd } from '../dates'
 import { PhotoDropzone } from './PhotoDropzone'
 
@@ -37,6 +47,18 @@ export function OrderForm({ initial, isEdit = Boolean(initial), onSave, onCancel
   const [imageUrls, setImageUrls] = useState<string[]>(initial?.imageUrls ?? [])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  /*
+   * A pickup date in the past means she's writing up a cake that already went
+   * out the door, so it's treated as collected and settled unless she says
+   * otherwise. Kept as its own piece of state rather than derived, so
+   * unticking it sticks while she finishes the rest of the form.
+   */
+  const [pastSettled, setPastSettled] = useState(
+    // Editing something already collected? Mirror what it says. Otherwise the
+    // assumption applies — including a repeat, or a date tapped on the
+    // calendar, where `initial` is only a partly filled template.
+    isEdit && initial?.status === 'completed' ? Boolean(initial.balancePaid) : true
+  )
 
   // esc to close
   useEffect(() => {
@@ -47,7 +69,10 @@ export function OrderForm({ initial, isEdit = Boolean(initial), onSave, onCancel
 
   const changeTiers = (n: number) => {
     setTierCount(n)
-    setTierSizes((prev) => TIER_DEFAULTS[n].map((d, i) => prev[i] ?? d))
+    setTierSizes((prev) =>
+      // a sheet or slab can't be a tier, so it falls back to the default round
+      TIER_DEFAULTS[n].map((d, i) => (n > 1 && !isRoundSize(prev[i] ?? '') ? d : (prev[i] ?? d)))
+    )
   }
 
   const setTierSize = (i: number, size: string) => {
@@ -63,9 +88,14 @@ export function OrderForm({ initial, isEdit = Boolean(initial), onSave, onCancel
     [0, 0]
   )
 
+  const today = todayYmd()
+  const isPast = pickupDate !== '' && pickupDate < today
+
   const priceNum = Number(price) || 0
   const depositNum = Number(depositAmount) || 0
   const balance = Math.max(0, priceNum - depositNum)
+  // for a past pickup the "already picked up & paid" tick is the paid control
+  const effectivePaid = isPast ? pastSettled : balancePaid
   const canSave =
     customerName.trim() !== '' &&
     pickupDate !== '' &&
@@ -93,11 +123,16 @@ export function OrderForm({ initial, isEdit = Boolean(initial), onSave, onCancel
         depositAmount: depositNum,
         depositMethod,
         balanceMethod,
-        balancePaid: balancePaid || (priceNum > 0 && balance === 0),
+        balancePaid: effectivePaid || (priceNum > 0 && balance === 0),
         cakeText: cakeText.trim(),
         designNotes: designNotes.trim(),
         imageUrls,
-        status: isEdit ? (initial?.status ?? 'upcoming') : 'upcoming',
+        /*
+         * The date has passed, so the cake was collected either way. Whether
+         * the money came with it is the tick above: unticked leaves a balance
+         * owing, which is what makes it show up as money still to collect.
+         */
+        status: isPast ? 'completed' : isEdit ? (initial?.status ?? 'upcoming') : 'upcoming',
       })
     } catch (err) {
       setError(`Couldn't save — ${err instanceof Error ? err.message : String(err)}`)
@@ -159,28 +194,48 @@ export function OrderForm({ initial, isEdit = Boolean(initial), onSave, onCancel
             </div>
 
             {tierCount === 1 ? (
-              <div className="size-row" role="radiogroup" aria-label="Cake size">
-                {SIZES.map((s) => (
-                  <button
-                    key={s.size}
-                    type="button"
-                    role="radio"
-                    aria-checked={tierSizes[0] === s.size}
-                    className={`size-chip ${tierSizes[0] === s.size ? 'chip-on' : ''}`}
-                    onClick={() => setTierSize(0, s.size)}
-                  >
-                    <strong>{s.size}</strong>
-                    <small>{s.serves}</small>
-                  </button>
-                ))}
-              </div>
+              <>
+                <div className="size-row" role="radiogroup" aria-label="Round cake size">
+                  {ROUND_SIZES.map((s) => (
+                    <button
+                      key={s.size}
+                      type="button"
+                      role="radio"
+                      aria-checked={tierSizes[0] === s.size}
+                      className={`size-chip ${tierSizes[0] === s.size ? 'chip-on' : ''}`}
+                      onClick={() => setTierSize(0, s.size)}
+                    >
+                      <strong>{s.label}</strong>
+                      <small>{s.serves}</small>
+                    </button>
+                  ))}
+                </div>
+                <p className="size-divider">
+                  <span>or by the tray</span>
+                </p>
+                <div className="size-row size-row-wide" role="radiogroup" aria-label="Large cake size">
+                  {LARGE_SIZES.map((s) => (
+                    <button
+                      key={s.size}
+                      type="button"
+                      role="radio"
+                      aria-checked={tierSizes[0] === s.size}
+                      className={`size-chip ${tierSizes[0] === s.size ? 'chip-on' : ''}`}
+                      onClick={() => setTierSize(0, s.size)}
+                    >
+                      <strong>{s.label}</strong>
+                      <small>{s.serves}</small>
+                    </button>
+                  ))}
+                </div>
+              </>
             ) : (
               <div className="tier-rows">
                 {TIER_NAMES[tierCount].map((name, i) => (
                   <div className="tier-row" key={name} role="radiogroup" aria-label={`${name} size`}>
                     <span className="tier-name">{name}</span>
                     <div className="tier-chips">
-                      {SIZES.map((s) => (
+                      {ROUND_SIZES.map((s) => (
                         <button
                           key={s.size}
                           type="button"
@@ -189,7 +244,7 @@ export function OrderForm({ initial, isEdit = Boolean(initial), onSave, onCancel
                           className={`chip ${tierSizes[i] === s.size ? 'chip-on' : ''}`}
                           onClick={() => setTierSize(i, s.size)}
                         >
-                          {s.size}
+                          {s.label}
                         </button>
                       ))}
                     </div>
@@ -244,9 +299,10 @@ export function OrderForm({ initial, isEdit = Boolean(initial), onSave, onCancel
             <div className="row-2">
               <label className="field">
                 <span>Date *</span>
+                {/* No `min`: past dates are allowed on purpose, so a cake that
+                    already went out can still be written up afterwards. */}
                 <input
                   type="date"
-                  min={todayYmd()}
                   value={pickupDate}
                   onChange={(e) => setPickupDate(e.target.value)}
                 />
@@ -256,7 +312,32 @@ export function OrderForm({ initial, isEdit = Boolean(initial), onSave, onCancel
                 <input type="time" value={pickupTime} onChange={(e) => setPickupTime(e.target.value)} />
               </label>
             </div>
-            <p className="hint">Reminders go out 2 days before, 1 day before, and the morning of pickup.</p>
+
+            {isPast ? (
+              <div className={`past-note ${pastSettled ? 'past-note-settled' : ''}`}>
+                <p className="past-note-head">
+                  <span aria-hidden="true">↺</span>
+                  That date has already gone by, so this is logged as a cake you’ve already made.
+                </p>
+                <label className="check">
+                  <input
+                    type="checkbox"
+                    checked={pastSettled}
+                    onChange={(e) => setPastSettled(e.target.checked)}
+                  />
+                  <span>Picked up and paid in full</span>
+                </label>
+                <p className="hint">
+                  {pastSettled
+                    ? 'It’ll go straight into your records as done and settled — no reminders will be sent.'
+                    : 'Untick means the cake went out but the money didn’t — it’ll show up under what you’re still owed.'}
+                </p>
+              </div>
+            ) : (
+              <p className="hint">
+                Reminders go out 2 days before, 1 day before, and the morning of pickup.
+              </p>
+            )}
           </section>
 
           <section className="fieldset">
@@ -313,8 +394,8 @@ export function OrderForm({ initial, isEdit = Boolean(initial), onSave, onCancel
             )}
 
             {priceNum > 0 && (
-              <div className={`balance-box ${balance === 0 || balancePaid ? 'balance-paid' : ''}`}>
-                {balance === 0 || balancePaid ? (
+              <div className={`balance-box ${balance === 0 || effectivePaid ? 'balance-paid' : ''}`}>
+                {balance === 0 || effectivePaid ? (
                   <strong>Paid in full ({money(priceNum)})</strong>
                 ) : (
                   <>
@@ -333,7 +414,7 @@ export function OrderForm({ initial, isEdit = Boolean(initial), onSave, onCancel
                     </div>
                   </>
                 )}
-                {balance > 0 && (
+                {balance > 0 && !isPast && (
                   <label className="check">
                     <input
                       type="checkbox"
