@@ -104,6 +104,14 @@ export interface Settings {
   hstRate: number
   /** prices already include tax (most home bakeries) vs added on top */
   pricesIncludeTax: boolean
+  /**
+   * The month the bakery started keeping books here (YYYY-MM), '' = not set.
+   *
+   * Recurring bills would otherwise be charged backwards forever: add rent
+   * today and last January suddenly shows a month of rent against no sales,
+   * inventing losses for a time she wasn't tracking anything.
+   */
+  startMonth: string
 }
 
 export interface FinanceData {
@@ -121,6 +129,7 @@ export const DEFAULT_SETTINGS: Omit<Settings, 'id' | 'createdAt'> = {
   hstRegistered: false,
   hstRate: 0.13,
   pricesIncludeTax: true,
+  startMonth: '',
 }
 
 export type FinanceKind = keyof FinanceData

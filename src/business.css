@@ -90,7 +90,56 @@
 
 .period-picks {
   display: flex;
+  align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Each control keeps its natural width and the row wraps instead. Letting
+   them shrink to fit clipped "September" down to "Sep" on a phone. */
+.period-picks .pick {
+  flex: 0 0 auto;
+}
+
+.pick-year select {
+  min-width: 5.5em;
+}
+
+.pick-month select {
+  min-width: 8.5em;
+}
+
+/* the month select while "whole year" is ticked — still readable, clearly off */
+.pick-off {
+  opacity: 0.45;
+}
+
+.pick-off select {
+  cursor: not-allowed;
+}
+
+.pick-check {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+/* ── "counting bills from" — the floor under every recurring bill ── */
+
+.start-month {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  background: var(--surface-2);
+  border-radius: 12px;
+}
+
+.start-month .pick {
+  flex-wrap: wrap;
+}
+
+.start-month .hint {
+  margin: 8px 0 0;
 }
 
 .pick {

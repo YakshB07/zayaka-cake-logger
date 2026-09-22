@@ -15,6 +15,7 @@ import { DEFAULT_SETTINGS } from '../types'
 import { api } from '../api'
 import {
   activeYears,
+  selectableMonths,
   addMonths,
   allTimeRange,
   breakEven,
@@ -54,6 +55,11 @@ import { todayYmd } from '../dates'
 
 const EMPTY: FinanceData = { fixedCosts: [], categories: [], expenses: [], income: [], settings: [] }
 
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+]
+
 const PRESETS = [
   { value: 'thisMonth', label: 'This month' },
   { value: 'last3', label: '3 months' },
@@ -84,8 +90,17 @@ export function BusinessPage({
   const [fin, setFin] = useState<FinanceData>(EMPTY)
   const [loading, setLoading] = useState(true)
   const [preset, setPreset] = useState('thisYear')
-  const [customMonth, setCustomMonth] = useState('')
-  const [customYear, setCustomYear] = useState('')
+  /*
+   * The picker used to be two dropdowns that fought each other: a Month list
+   * of every month across every year ("September 2026", "August 2026", ...)
+   * and a separate Year list, each clearing the other. Now the year and the
+   * month are chosen independently, and a tick widens it to the whole year.
+   */
+  const [custom, setCustom] = useState(false)
+  const now = new Date()
+  const [pickYear, setPickYear] = useState(now.getFullYear())
+  const [pickMonth, setPickMonth] = useState(now.getMonth() + 1)
+  const [wholeYear, setWholeYear] = useState(false)
   const [sheet, setSheet] = useState<Sheet>(null)
 
   const [loadError, setLoadError] = useState('')
@@ -108,33 +123,70 @@ export function BusinessPage({
     void refresh()
   }, [refresh])
 
+  // Settings live as a single row; create it the first time something is saved.
+  const settings = fin.settings[0]
+
+  /*
+   * The month the books start. Until she sets it, it's inferred from her
+   * earliest real record, falling back to this month — so a brand-new set of
+   * books never charges a monthly bill to months that predate the business,
+   * and someone who back-fills a few months still sees those months costed.
+   */
+  const startMonth = useMemo(() => {
+    if (settings?.startMonth) return settings.startMonth
+    const dates = [
+      ...orders.map((o) => o.pickupDate),
+      ...fin.expenses.map((e) => e.date),
+      ...fin.income.map((i) => i.date),
+    ].filter(Boolean)
+    const earliest = dates.length ? dates.reduce((a, b) => (a < b ? a : b)).slice(0, 7) : ''
+    return earliest || new Date().toISOString().slice(0, 7)
+  }, [settings?.startMonth, orders, fin.expenses, fin.income])
+
+  /*
+   * Every figure below reads the start month off the settings row, so they all
+   * get a copy of `fin` carrying the effective one. Passing plain `fin` would
+   * apply the inferred default to the label above and to nothing else.
+   */
+  const fc = useMemo<FinanceData>(
+    () => ({ ...fin, settings: [{ ...DEFAULT_SETTINGS, ...(settings ?? {}), startMonth } as Settings] }),
+    [fin, settings, startMonth]
+  )
+
   // ── the period being looked at ──
   const range: Range = useMemo(() => {
-    if (customMonth) return monthRange(customMonth)
-    if (customYear) return yearRange(Number(customYear))
-    return presetRange(preset, orders, fin)
-  }, [preset, customMonth, customYear, orders, fin])
+    if (custom) {
+      return wholeYear
+        ? yearRange(pickYear)
+        : monthRange(`${pickYear}-${String(pickMonth).padStart(2, '0')}`)
+    }
+    return presetRange(preset, orders, fc)
+  }, [preset, custom, pickYear, pickMonth, wholeYear, orders, fc])
 
   const months = useMemo(() => monthsInRange(range), [range])
   // Past three years, monthly bars get too thin to read — roll up to years.
   const byYear = months.length > 36
   const series = useMemo(
-    () => (byYear ? yearlySeries(orders, fin, months) : monthlySeries(orders, fin, months)),
-    [orders, fin, months, byYear]
+    () => (byYear ? yearlySeries(orders, fc, months) : monthlySeries(orders, fc, months)),
+    [orders, fc, months, byYear]
   )
-  const summary = useMemo(() => summarise(orders, fin, range), [orders, fin, range])
+  const summary = useMemo(() => summarise(orders, fc, range), [orders, fc, range])
   const prevSummary = useMemo(
-    () => summarise(orders, fin, previousRange(range)),
-    [orders, fin, range]
+    () => summarise(orders, fc, previousRange(range)),
+    [orders, fc, range]
   )
-  const insights = useMemo(() => buildInsights(orders, fin, range), [orders, fin, range])
-  const be = useMemo(() => breakEven(orders, fin, range), [orders, fin, range])
-  const costSlices = useMemo(() => categoryBreakdown(fin, range), [fin, range])
-  const fixedSlices = useMemo(() => fixedCostBreakdown(fin, range), [fin, range])
-  const flavours = useMemo(() => flavourStats(orders, fin, range), [orders, fin, range])
-  const sizes = useMemo(() => sizeStats(orders, fin, range), [orders, fin, range])
+  const insights = useMemo(() => buildInsights(orders, fc, range), [orders, fc, range])
+  const be = useMemo(() => breakEven(orders, fc, range), [orders, fc, range])
+  const costSlices = useMemo(() => categoryBreakdown(fc, range), [fc, range])
+  const fixedSlices = useMemo(() => fixedCostBreakdown(fc, range), [fc, range])
+  const flavours = useMemo(() => flavourStats(orders, fc, range), [orders, fc, range])
+  const sizes = useMemo(() => sizeStats(orders, fc, range), [orders, fc, range])
   const weekdays = useMemo(() => weekdayStats(orders, range), [orders, range])
-  const years = useMemo(() => activeYears(orders, fin), [orders, fin])
+  const years = useMemo(() => activeYears(orders, fc), [orders, fc])
+  const monthOptions = useMemo(
+    () => selectableMonths(pickYear, orders, fc),
+    [pickYear, orders, fc]
+  )
 
   // ── saving ──
   const save = async (fn: () => Promise<unknown>, msg: string) => {
@@ -154,9 +206,6 @@ export function BusinessPage({
       onToast(`Didn't work — ${err instanceof Error ? err.message : String(err)}`)
     }
   }
-
-  // Settings live as a single row; create it the first time something is saved.
-  const settings = fin.settings[0]
 
   const saveSettings = async (patch: Partial<Settings>) => {
     if (settings) await api.updateFinance('settings', settings.id, patch)
@@ -243,12 +292,11 @@ export function BusinessPage({
             <button
               key={p.value}
               role="tab"
-              aria-selected={!customMonth && !customYear && preset === p.value}
-              className={!customMonth && !customYear && preset === p.value ? 'seg-active' : ''}
+              aria-selected={!custom && preset === p.value}
+              className={!custom && preset === p.value ? 'seg-active' : ''}
               onClick={() => {
                 setPreset(p.value)
-                setCustomMonth('')
-                setCustomYear('')
+                setCustom(false)
               }}
             >
               {p.label}
@@ -256,41 +304,57 @@ export function BusinessPage({
           ))}
         </div>
         <div className="period-picks">
-          <label className="pick">
-            <span>Month</span>
-            {/* a select, not <input type="month"> — an empty month input renders
-                as "---------, ----" on a phone and looks broken */}
-            <select
-              value={customMonth}
-              onChange={(e) => {
-                setCustomMonth(e.target.value)
-                setCustomYear('')
-              }}
-            >
-              <option value="">—</option>
-              {Array.from({ length: 24 }, (_, i) => addMonths(todayYmd().slice(0, 7), -i)).map((ym) => (
-                <option key={ym} value={ym}>
-                  {monthLabel(ym, true)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="pick">
+          <label className="pick pick-year">
             <span>Year</span>
             <select
-              value={customYear}
+              value={pickYear}
               onChange={(e) => {
-                setCustomYear(e.target.value)
-                setCustomMonth('')
+                const y = Number(e.target.value)
+                setPickYear(y)
+                // keep the month valid for the year that was just chosen
+                const months = selectableMonths(y, orders, fc)
+                if (months.length && !months.some((m) => Number(m.slice(5)) === pickMonth)) {
+                  setPickMonth(Number(months[months.length - 1].slice(5)))
+                }
+                setCustom(true)
               }}
             >
-              <option value="">—</option>
               {years.map((y) => (
                 <option key={y} value={y}>
                   {y}
                 </option>
               ))}
             </select>
+          </label>
+          <label className={`pick pick-month ${wholeYear ? 'pick-off' : ''}`}>
+            <span>Month</span>
+            {/* a select, not <input type="month"> — an empty month input renders
+                as "---------, ----" on a phone and looks broken */}
+            <select
+              value={String(pickMonth).padStart(2, '0')}
+              disabled={wholeYear}
+              onChange={(e) => {
+                setPickMonth(Number(e.target.value))
+                setCustom(true)
+              }}
+            >
+              {monthOptions.map((ym) => (
+                <option key={ym} value={ym.slice(5)}>
+                  {MONTH_NAMES[Number(ym.slice(5)) - 1]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="check pick-check">
+            <input
+              type="checkbox"
+              checked={wholeYear}
+              onChange={(e) => {
+                setWholeYear(e.target.checked)
+                setCustom(true)
+              }}
+            />
+            <span>Whole year</span>
           </label>
         </div>
       </div>
@@ -407,7 +471,7 @@ export function BusinessPage({
       {/* ── goals ── */}
       <GoalsCard
         orders={orders}
-        fin={fin}
+        fin={fc}
         range={range}
         settings={settings}
         onSave={saveSettings}
@@ -648,10 +712,12 @@ export function BusinessPage({
         }}
         onDeleteCategory={deleteCategory}
         onAddStarters={addStarters}
+        startMonth={startMonth}
+        onStartMonth={(ym) => saveSettings({ startMonth: ym })}
       />
 
       {/* ── tax ── */}
-      <TaxCard orders={orders} fin={fin} range={range} settings={settings} onSave={saveSettings} />
+      <TaxCard orders={orders} fin={fc} range={range} settings={settings} onSave={saveSettings} />
 
       {/* ── export ── */}
       <section className="export-card">
@@ -664,7 +730,7 @@ export function BusinessPage({
         <div className="export-rows">
           <div className="export-row">
             <span>What you're looking at now</span>
-            <button className="btn btn-tint" onClick={() => exportRange(orders, fin, range)}>
+            <button className="btn btn-tint" onClick={() => exportRange(orders, fc, range)}>
               Export {range.label}
             </button>
           </div>
@@ -686,7 +752,7 @@ export function BusinessPage({
                 className="btn btn-tint"
                 onClick={() => {
                   const el = document.getElementById('export-month') as HTMLSelectElement | null
-                  if (el) exportMonth(orders, fin, el.value)
+                  if (el) exportMonth(orders, fc, el.value)
                 }}
               >
                 Export month
@@ -707,7 +773,7 @@ export function BusinessPage({
                 className="btn btn-tint"
                 onClick={() => {
                   const el = document.getElementById('export-year') as HTMLSelectElement | null
-                  if (el) exportYear(orders, fin, Number(el.value))
+                  if (el) exportYear(orders, fc, Number(el.value))
                 }}
               >
                 Export year
@@ -716,7 +782,7 @@ export function BusinessPage({
           </div>
           <div className="export-row">
             <span>Absolutely everything</span>
-            <button className="btn btn-tint" onClick={() => exportRange(orders, fin, allTimeRange(orders, fin))}>
+            <button className="btn btn-tint" onClick={() => exportRange(orders, fc, allTimeRange(orders, fc))}>
               Export all time
             </button>
           </div>

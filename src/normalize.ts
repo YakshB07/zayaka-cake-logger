@@ -156,6 +156,7 @@ function normalizeSettings(raw: unknown) {
     // a nonsense rate would silently poison every tax figure
     hstRate: rate > 0 && rate < 1 ? rate : 0.13,
     pricesIncludeTax: s.pricesIncludeTax === undefined ? true : bool(s.pricesIncludeTax),
+    startMonth: ym(s.startMonth),
   }
 }
 

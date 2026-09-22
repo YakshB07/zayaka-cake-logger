@@ -38,6 +38,9 @@ interface Props {
   onArchiveCategory: (c: CostCategory, archived: boolean) => Promise<void>
   onDeleteCategory: (c: CostCategory) => Promise<void>
   onAddStarters: () => Promise<void>
+  /** the month the bakery started keeping books here (YYYY-MM), '' = not set */
+  startMonth: string
+  onStartMonth: (ym: string) => Promise<void>
 }
 
 type Tab = 'spending' | 'fixed' | 'income' | 'categories'
@@ -210,6 +213,8 @@ export function CostsPanel(props: Props) {
               Add a bill
             </button>
           </div>
+
+          <StartMonthRow value={props.startMonth} onChange={props.onStartMonth} />
 
           {fin.fixedCosts.length === 0 ? (
             <div className="panel-empty">
@@ -398,5 +403,59 @@ function CategoryRow({
         )}
       </div>
     </li>
+  )
+}
+
+/**
+ * "Counting bills from ___".
+ *
+ * A monthly bill has no date of its own, so without a floor it gets charged
+ * to every month the app can see. Adding rent in September wrote a month of
+ * rent into the previous January, February, March and so on — months with no
+ * sales in them — and the dashboard showed a year of invented losses.
+ */
+function StartMonthRow({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (ym: string) => Promise<void>
+}) {
+  const [saving, setSaving] = useState(false)
+  const thisMonth = new Date().toISOString().slice(0, 7)
+  // two years back is plenty to reach for; nothing ahead of this month
+  const options = Array.from({ length: 25 }, (_, i) => {
+    const d = new Date()
+    d.setDate(1)
+    d.setMonth(d.getMonth() - i)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  })
+
+  const pick = async (ym: string) => {
+    setSaving(true)
+    try {
+      await onChange(ym)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="start-month">
+      <label className="pick">
+        <span>Counting bills from</span>
+        <select value={value || thisMonth} disabled={saving} onChange={(e) => void pick(e.target.value)}>
+          {options.map((ym) => (
+            <option key={ym} value={ym}>
+              {monthLabel(ym, true)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p className="hint">
+        The month you started keeping books here. Nothing above is charged to any month before it, so
+        the months you weren’t tracking stay empty instead of showing a loss.
+      </p>
+    </div>
   )
 }

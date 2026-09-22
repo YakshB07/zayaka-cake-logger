@@ -127,15 +127,29 @@ export function monthlyAmount(fc: FixedCost): number {
   return amt
 }
 
-function activeInMonth(fc: FixedCost, ym: string): boolean {
+/**
+ * The month the bakery started keeping books here. Before it, no recurring
+ * bill is charged at all.
+ *
+ * Without this, adding rent today back-dated a month of rent to every month
+ * the app can see — months with no sales in them — so the dashboard invented
+ * losses stretching back a year for a business that started in September.
+ */
+export function trackingStart(fin: FinanceData): string {
+  const s = fin.settings[0]?.startMonth ?? ''
+  return /^\d{4}-(0[1-9]|1[0-2])$/.test(s) ? s : ''
+}
+
+function activeInMonth(fc: FixedCost, ym: string, start = ''): boolean {
+  if (start && ym < start) return false
   if (fc.startMonth && ym < fc.startMonth) return false
   if (fc.endMonth && ym > fc.endMonth) return false
   return true
 }
 
 /** Total fixed cost for one calendar month. */
-export function fixedCostsForMonth(fixed: FixedCost[], ym: string): number {
-  return fixed.reduce((sum, fc) => (activeInMonth(fc, ym) ? sum + monthlyAmount(fc) : sum), 0)
+export function fixedCostsForMonth(fixed: FixedCost[], ym: string, start = ''): number {
+  return fixed.reduce((sum, fc) => (activeInMonth(fc, ym, start) ? sum + monthlyAmount(fc) : sum), 0)
 }
 
 /**
@@ -143,7 +157,7 @@ export function fixedCostsForMonth(fixed: FixedCost[], ym: string): number {
  * each end — so "Mar 15 → Apr 14" charges half of each month's rent rather than
  * two whole months of it.
  */
-export function fixedCostsForRange(fixed: FixedCost[], range: Range): number {
+export function fixedCostsForRange(fixed: FixedCost[], range: Range, start = ''): number {
   let total = 0
   for (const ym of monthsInRange(range)) {
     const dim = daysInMonth(ym)
@@ -153,7 +167,7 @@ export function fixedCostsForRange(fixed: FixedCost[], range: Range): number {
     const to = range.to < monthEnd ? range.to : monthEnd
     const days = Number(to.slice(8)) - Number(from.slice(8)) + 1
     if (days <= 0) continue
-    total += fixedCostsForMonth(fixed, ym) * (days / dim)
+    total += fixedCostsForMonth(fixed, ym, start) * (days / dim)
   }
   return total
 }
@@ -169,7 +183,7 @@ export function summarise(orders: CakeOrder[], fin: FinanceData, range: Range): 
   const variableCosts = fin.expenses
     .filter((e) => inRange(e.date, range))
     .reduce((s, e) => s + (Number(e.amount) || 0), 0)
-  const fixedCosts = fixedCostsForRange(fin.fixedCosts, range)
+  const fixedCosts = fixedCostsForRange(fin.fixedCosts, range, trackingStart(fin))
 
   const revenue = orderRevenue + otherIncome
   const totalCosts = variableCosts + fixedCosts
@@ -232,7 +246,7 @@ export function monthlySeries(orders: CakeOrder[], fin: FinanceData, months: str
     const variableCosts = fin.expenses
       .filter((e) => ymOf(e.date) === ym)
       .reduce((s, e) => s + (Number(e.amount) || 0), 0)
-    const fixed = fixedCostsForMonth(fin.fixedCosts, ym)
+    const fixed = fixedCostsForMonth(fin.fixedCosts, ym, trackingStart(fin))
     return {
       ym,
       label: monthLabel(ym),
@@ -284,7 +298,7 @@ export function categoryBreakdown(fin: FinanceData, range: Range): CategorySlice
     cur.count += 1
     totals.set(key, cur)
   }
-  const fixedTotal = fixedCostsForRange(fin.fixedCosts, range)
+  const fixedTotal = fixedCostsForRange(fin.fixedCosts, range, trackingStart(fin))
   const grand = [...totals.values()].reduce((s, t) => s + t.total, 0) + fixedTotal
 
   const slices: CategorySlice[] = [...totals.entries()].map(([id, t]) => ({
@@ -309,10 +323,11 @@ export function categoryBreakdown(fin: FinanceData, range: Range): CategorySlice
 /** Fixed bills broken out one by one, biggest first. */
 export function fixedCostBreakdown(fin: FinanceData, range: Range): CategorySlice[] {
   const months = monthsInRange(range)
-  const grand = fixedCostsForRange(fin.fixedCosts, range)
+  const start = trackingStart(fin)
+  const grand = fixedCostsForRange(fin.fixedCosts, range, start)
   return fin.fixedCosts
     .map((fc) => {
-      const total = months.reduce((s, ym) => s + (activeInMonth(fc, ym) ? monthlyAmount(fc) : 0), 0)
+      const total = months.reduce((s, ym) => s + (activeInMonth(fc, ym, start) ? monthlyAmount(fc) : 0), 0)
       return { id: fc.id, name: fc.name, total, share: grand > 0 ? total / grand : 0, count: 1 }
     })
     .filter((s) => s.total > 0)
@@ -438,7 +453,7 @@ export interface BreakEven {
 export function breakEven(orders: CakeOrder[], fin: FinanceData, range: Range): BreakEven {
   const months = monthsInRange(range)
   const monthlyFixed = months.length
-    ? months.reduce((s, ym) => s + fixedCostsForMonth(fin.fixedCosts, ym), 0) / months.length
+    ? months.reduce((s, ym) => s + fixedCostsForMonth(fin.fixedCosts, ym, trackingStart(fin)), 0) / months.length
     : 0
   const s = summarise(orders, fin, range)
   const avgPrice = s.avgOrder
@@ -513,14 +528,21 @@ export function presetRange(preset: string, orders: CakeOrder[], fin: FinanceDat
 
 /** Widest range that still covers every record, so "All time" is never empty. */
 export function allTimeRange(orders: CakeOrder[], fin: FinanceData): Range {
+  const start = trackingStart(fin)
   const dates = [
     ...orders.map((o) => o.pickupDate),
     ...fin.expenses.map((e) => e.date),
     ...fin.income.map((i) => i.date),
-    ...fin.fixedCosts.map((f) => (f.startMonth ? `${f.startMonth}-01` : '')),
+    // Recurring bills no longer drag the window backwards on their own — one
+    // with no start month would otherwise reach back past the whole business.
+    ...fin.fixedCosts.map((f) => (f.startMonth && (!start || f.startMonth >= start) ? `${f.startMonth}-01` : '')),
+    start ? `${start}-01` : '',
   ].filter(Boolean)
   const today = ymd(new Date())
-  if (!dates.length) return { from: `${new Date().getFullYear()}-01-01`, to: today, label: 'All time' }
+  if (!dates.length) {
+    const from = start ? `${start}-01` : `${new Date().getFullYear()}-01-01`
+    return { from: from <= today ? from : today, to: today, label: 'All time' }
+  }
   // A brand-new bakery may have nothing but future bookings, which would put
   // `from` after `to` and make every total silently read zero. Never invert.
   const earliest = dates.reduce((a, b) => (a < b ? a : b))
@@ -585,6 +607,31 @@ export function activeYears(orders: CakeOrder[], fin: FinanceData): number[] {
   for (const o of orders) if (o.pickupDate) years.add(Number(o.pickupDate.slice(0, 4)))
   for (const e of fin.expenses) if (e.date) years.add(Number(e.date.slice(0, 4)))
   for (const i of fin.income) if (i.date) years.add(Number(i.date.slice(0, 4)))
+  const start = trackingStart(fin)
+  if (start) years.add(Number(start.slice(0, 4)))
   years.add(new Date().getFullYear())
   return [...years].filter((y) => y > 1970).sort((a, b) => b - a)
+}
+
+/**
+ * The months worth offering in the period picker for one year: never before
+ * the bakery started, never past this month, and always including any month
+ * that actually has a record in it (a cake logged after the fact, say).
+ */
+export function selectableMonths(year: number, orders: CakeOrder[], fin: FinanceData): string[] {
+  const start = trackingStart(fin)
+  const thisMonth = ymd(new Date()).slice(0, 7)
+  const withData = new Set<string>([
+    ...orders.map((o) => ymOf(o.pickupDate)),
+    ...fin.expenses.map((e) => ymOf(e.date)),
+    ...fin.income.map((i) => ymOf(i.date)),
+  ])
+  const out: string[] = []
+  for (let m = 1; m <= 12; m++) {
+    const ym = `${year}-${pad(m)}`
+    if (ym > thisMonth) break
+    if (start && ym < start && !withData.has(ym)) continue
+    out.push(ym)
+  }
+  return out
 }
