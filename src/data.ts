@@ -1,3 +1,10 @@
+/**
+ * A cake is one of four shapes. Round cakes are sold by diameter and stack
+ * into tiers; the other three are their own bakes with their own sizes, so
+ * they sit beside the tier options rather than inside them.
+ */
+export type CakeShape = 'round' | 'tall' | 'sheet' | 'slab'
+
 export interface SizeInfo {
   /** the value stored on the order — short enough to read on a card */
   size: string
@@ -5,35 +12,34 @@ export interface SizeInfo {
   label: string
   /** the small text under it */
   serves: string
-  group: SizeGroup
+  shape: CakeShape
 }
 
-/**
- * Round layer cakes are sold by diameter and can be stacked into tiers. The
- * large-format ones are single rectangular bakes sold by the tray, so they
- * carry their dimensions in the name and never stack.
- */
-export type SizeGroup = 'Round' | 'Large'
-
 export const SIZES: SizeInfo[] = [
-  { size: '4"', label: '4"', serves: 'Serves 4–6', group: 'Round' },
-  { size: '6"', label: '6"', serves: 'Serves 8–10', group: 'Round' },
-  { size: '8"', label: '8"', serves: 'Serves 15–20', group: 'Round' },
-  { size: '10"', label: '10"', serves: 'Serves 25–30', group: 'Round' },
-  { size: '12"', label: '12"', serves: 'Serves 35–40', group: 'Round' },
-  // Tall, sheet and slab as the bakery lists them. 12×9 and 18×6 are the same
-  // 108 square inches, so they serve the same number — the shape is the choice.
-  { size: 'Tall 18×9', label: 'Tall', serves: '18" × 9" · serves 40–50', group: 'Large' },
-  { size: 'Sheet 12×9', label: 'Sheet cake', serves: '12" × 9" · serves 25–30', group: 'Large' },
-  { size: 'Slab 18×6', label: 'Slab cake', serves: '18" × 6" · serves 25–30', group: 'Large' },
+  { size: '4"', label: '4"', serves: 'Serves 4–6', shape: 'round' },
+  { size: '6"', label: '6"', serves: 'Serves 8–10', shape: 'round' },
+  { size: '8"', label: '8"', serves: 'Serves 15–20', shape: 'round' },
+  { size: '10"', label: '10"', serves: 'Serves 25–30', shape: 'round' },
+  { size: '12"', label: '12"', serves: 'Serves 35–40', shape: 'round' },
+  // a tall cake is a deeper round bake, so it feeds more than its width suggests
+  { size: 'Tall 6"', label: '6"', serves: 'Serves 12–15', shape: 'tall' },
+  { size: 'Tall 8"', label: '8"', serves: 'Serves 25–30', shape: 'tall' },
+  // trays, cut into roughly 2" squares
+  { size: 'Sheet 18×9', label: '18" × 9"', serves: 'Serves 40–45', shape: 'sheet' },
+  { size: 'Sheet 12×9', label: '12" × 9"', serves: 'Serves 25–30', shape: 'sheet' },
+  { size: 'Slab 18×6', label: '18" × 6"', serves: 'Serves 25–30', shape: 'slab' },
 ]
 
-/** Only these can be stacked, so only these appear in the per-tier pickers. */
-export const ROUND_SIZES = SIZES.filter((s) => s.group === 'Round')
-export const LARGE_SIZES = SIZES.filter((s) => s.group === 'Large')
+/** Only round cakes stack, so only these appear in the per-tier pickers. */
+export const ROUND_SIZES = SIZES.filter((s) => s.shape === 'round')
 
-export const isRoundSize = (size: string): boolean =>
-  ROUND_SIZES.some((s) => s.size === size)
+export const sizesFor = (shape: CakeShape): SizeInfo[] => SIZES.filter((s) => s.shape === shape)
+
+export const isRoundSize = (size: string): boolean => ROUND_SIZES.some((s) => s.size === size)
+
+/** Which shape a stored size belongs to; anything unrecognised reads as round. */
+export const shapeOf = (size: string): CakeShape =>
+  SIZES.find((s) => s.size === size)?.shape ?? 'round'
 
 export const SERVES_RANGE: Record<string, [number, number]> = {
   '4"': [4, 6],
@@ -41,10 +47,32 @@ export const SERVES_RANGE: Record<string, [number, number]> = {
   '8"': [15, 20],
   '10"': [25, 30],
   '12"': [35, 40],
-  'Tall 18×9': [40, 50],
+  'Tall 6"': [12, 15],
+  'Tall 8"': [25, 30],
+  'Sheet 18×9': [40, 45],
   'Sheet 12×9': [25, 30],
   'Slab 18×6': [25, 30],
 }
+
+/**
+ * The row at the top of the form: three tier counts, then the three shapes
+ * that aren't stacked at all.
+ */
+export interface CakeType {
+  key: string
+  label: string
+  shape: CakeShape
+  tiers: number
+}
+
+export const CAKE_TYPES: CakeType[] = [
+  { key: 'round-1', label: 'Single tier', shape: 'round', tiers: 1 },
+  { key: 'round-2', label: 'Double tier', shape: 'round', tiers: 2 },
+  { key: 'round-3', label: 'Triple tier', shape: 'round', tiers: 3 },
+  { key: 'tall', label: 'Tall', shape: 'tall', tiers: 1 },
+  { key: 'sheet', label: 'Sheet', shape: 'sheet', tiers: 1 },
+  { key: 'slab', label: 'Slab', shape: 'slab', tiers: 1 },
+]
 
 export const TIERS = [
   { count: 1, label: 'Single tier' },

@@ -1322,13 +1322,31 @@ textarea {
   }
 }
 
-/* ─── Tier picker ─── */
-.seg-tiers {
-  align-self: flex-start;
+/* ─── Cake type picker ─── */
+
+/* Six options: three tier counts and three shapes. A grid rather than the
+   usual inline-flex so they come out even — and three to a row on a phone,
+   which lands the tier counts on one line and the shapes on the next. */
+.seg-types {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
 }
 
-.seg-tiers button {
-  padding: 7px 18px;
+.seg-types button {
+  padding: 7px 8px;
+  font-size: 13.5px;
+}
+
+@media (min-width: 560px) {
+  .seg-types {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .seg-types button {
+    padding: 7px 10px;
+    font-size: 14px;
+  }
 }
 
 .tier-rows {
@@ -1368,32 +1386,12 @@ textarea {
     min-height: 44px;
   }
 }
-/* ── size picker: round cakes, then the big trays ────────────────────────── */
+/* ── size picker ─────────────────────────────────────────────────────────── */
 
-/* The large-format chips carry dimensions and a serving count, so they need
-   room to breathe — two across on a phone rather than four. */
+/* A tray's chip reads "18" × 9"" with a serving count under it, so it needs
+   more room than a bare 8" — two across on a phone rather than four. */
 .size-row-wide {
   grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
-}
-
-.size-divider {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 12px 0 10px;
-  font-size: 11.5px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-2);
-}
-
-.size-divider::before,
-.size-divider::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--line);
 }
 
 /* ── a pickup date that has already gone by ─────────────────────────────── */

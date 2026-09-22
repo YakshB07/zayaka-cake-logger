@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react'
 import type { CakeOrder, NewOrder, PaymentMethod } from '../types'
 import {
+  CAKE_TYPES,
   FLAVOURS,
-  LARGE_SIZES,
   PAYMENT_METHODS,
   ROUND_SIZES,
   SERVES_RANGE,
-  TIERS,
   TIER_DEFAULTS,
   TIER_NAMES,
-  isRoundSize,
+  shapeOf,
+  sizesFor,
+  type CakeShape,
 } from '../data'
 import { money, todayYmd } from '../dates'
 import { PhotoDropzone } from './PhotoDropzone'
@@ -31,6 +32,14 @@ export function OrderForm({ initial, isEdit = Boolean(initial), onSave, onCancel
   const [tierCount, setTierCount] = useState(initial?.tierCount ?? 1)
   const [tierSizes, setTierSizes] = useState<string[]>(
     initial?.tierSizes?.length ? initial.tierSizes : [initial?.size ?? '8"']
+  )
+  /*
+   * Round cakes stack; tall, sheet and slab are their own bakes with their own
+   * sizes. The shape is read back off the stored size so editing an order
+   * lands on the right set of chips.
+   */
+  const [shape, setShape] = useState<CakeShape>(
+    shapeOf(initial?.tierSizes?.[0] ?? initial?.size ?? '')
   )
   const known = FLAVOURS.some((f) => f.name === initial?.flavour)
   const [flavour, setFlavour] = useState(initial ? (known ? initial.flavour : 'other') : '')
@@ -67,12 +76,21 @@ export function OrderForm({ initial, isEdit = Boolean(initial), onSave, onCancel
     return () => window.removeEventListener('keydown', onKey)
   }, [onCancel])
 
-  const changeTiers = (n: number) => {
-    setTierCount(n)
-    setTierSizes((prev) =>
-      // a sheet or slab can't be a tier, so it falls back to the default round
-      TIER_DEFAULTS[n].map((d, i) => (n > 1 && !isRoundSize(prev[i] ?? '') ? d : (prev[i] ?? d)))
-    )
+  /** Pick a cake type: a tier count for round cakes, or one of the shapes. */
+  const chooseType = (nextShape: CakeShape, tiers: number) => {
+    setShape(nextShape)
+    setTierCount(tiers)
+    if (nextShape === 'round') {
+      setTierSizes((prev) =>
+        // coming back from a tray, the old size isn't a round one any more
+        TIER_DEFAULTS[tiers].map((d, i) => (shapeOf(prev[i] ?? '') === 'round' ? (prev[i] ?? d) : d))
+      )
+    } else {
+      // each shape has its own sizes, so start on the first one
+      setTierSizes((prev) =>
+        shapeOf(prev[0] ?? '') === nextShape ? prev : [sizesFor(nextShape)[0].size]
+      )
+    }
   }
 
   const setTierSize = (i: number, size: string) => {
@@ -178,57 +196,44 @@ export function OrderForm({ initial, isEdit = Boolean(initial), onSave, onCancel
           <section className="fieldset">
             <h3 className="fieldset-title">Cake</h3>
 
-            <div className="segmented seg-tiers" role="radiogroup" aria-label="Number of tiers">
-              {TIERS.map((t) => (
-                <button
-                  key={t.count}
-                  type="button"
-                  role="radio"
-                  aria-checked={tierCount === t.count}
-                  className={tierCount === t.count ? 'seg-active' : ''}
-                  onClick={() => changeTiers(t.count)}
-                >
-                  {t.label}
-                </button>
-              ))}
+            <div className="segmented seg-types" role="radiogroup" aria-label="Kind of cake">
+              {CAKE_TYPES.map((t) => {
+                const on = shape === t.shape && (t.shape !== 'round' || tierCount === t.tiers)
+                return (
+                  <button
+                    key={t.key}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    className={on ? 'seg-active' : ''}
+                    onClick={() => chooseType(t.shape, t.tiers)}
+                  >
+                    {t.label}
+                  </button>
+                )
+              })}
             </div>
 
             {tierCount === 1 ? (
-              <>
-                <div className="size-row" role="radiogroup" aria-label="Round cake size">
-                  {ROUND_SIZES.map((s) => (
-                    <button
-                      key={s.size}
-                      type="button"
-                      role="radio"
-                      aria-checked={tierSizes[0] === s.size}
-                      className={`size-chip ${tierSizes[0] === s.size ? 'chip-on' : ''}`}
-                      onClick={() => setTierSize(0, s.size)}
-                    >
-                      <strong>{s.label}</strong>
-                      <small>{s.serves}</small>
-                    </button>
-                  ))}
-                </div>
-                <p className="size-divider">
-                  <span>or by the tray</span>
-                </p>
-                <div className="size-row size-row-wide" role="radiogroup" aria-label="Large cake size">
-                  {LARGE_SIZES.map((s) => (
-                    <button
-                      key={s.size}
-                      type="button"
-                      role="radio"
-                      aria-checked={tierSizes[0] === s.size}
-                      className={`size-chip ${tierSizes[0] === s.size ? 'chip-on' : ''}`}
-                      onClick={() => setTierSize(0, s.size)}
-                    >
-                      <strong>{s.label}</strong>
-                      <small>{s.serves}</small>
-                    </button>
-                  ))}
-                </div>
-              </>
+              <div
+                className={`size-row ${shape === 'round' ? '' : 'size-row-wide'}`}
+                role="radiogroup"
+                aria-label="Cake size"
+              >
+                {sizesFor(shape).map((s) => (
+                  <button
+                    key={s.size}
+                    type="button"
+                    role="radio"
+                    aria-checked={tierSizes[0] === s.size}
+                    className={`size-chip ${tierSizes[0] === s.size ? 'chip-on' : ''}`}
+                    onClick={() => setTierSize(0, s.size)}
+                  >
+                    <strong>{s.label}</strong>
+                    <small>{s.serves}</small>
+                  </button>
+                ))}
+              </div>
             ) : (
               <div className="tier-rows">
                 {TIER_NAMES[tierCount].map((name, i) => (
