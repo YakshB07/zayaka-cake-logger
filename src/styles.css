@@ -1434,3 +1434,39 @@ textarea {
 .past-note .hint {
   margin: 6px 0 0;
 }
+
+/* ── waking up: the free host sleeps, so the wait needs explaining ──────── */
+
+.spinner {
+  display: block;
+  width: 26px;
+  height: 26px;
+  margin: 0 auto 4px;
+  border: 2.5px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* respect a reduced-motion preference — show a steady ring instead */
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+    border-top-color: var(--line);
+  }
+}
+
+.waking-note {
+  display: block;
+  max-width: 34ch;
+  margin: 6px auto 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-2);
+}

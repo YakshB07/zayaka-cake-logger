@@ -160,6 +160,22 @@ app.post(
   })
 )
 
+/*
+ * Ping target for the keep-warm schedule.
+ *
+ * Render's free tier stops the container after 15 minutes with no traffic, and
+ * starting it again takes the best part of a minute. A request every 10
+ * minutes keeps it up. This answers immediately without waiting on anything,
+ * and kicks off the database connection in the background so the first real
+ * request doesn't pay for that either.
+ */
+let warming: Promise<unknown> | null = null
+app.get('/api/health', (_req, res) => {
+  res.json({ ok: true, at: new Date().toISOString() })
+  // once per process: opening the pool also creates the tables on first run
+  warming ??= listOrders().catch((e) => console.error('[warm]', e.message))
+})
+
 app.get('/api/config', (_req, res) => {
   res.json({
     smsConfigured: Boolean(
@@ -175,11 +191,29 @@ app.use('/uploads', express.static(UPLOADS_DIR))
 // browser then tried to parse as JSON ("Unexpected token <").
 app.use('/api', (_req, res) => res.status(404).json({ error: 'No such endpoint' }))
 
-// serve the built frontend in production (npm start)
+/*
+ * Serve the built frontend.
+ *
+ * `npm start` deliberately does NOT build first. It used to, which meant
+ * Render ran a full Vite build on every cold start — work its build step had
+ * already done at deploy time — and added that to the wait before the server
+ * would answer at all. Use `npm run serve` to build and start together.
+ */
 const dist = path.join(__dirname, '..', 'dist')
 if (fs.existsSync(dist)) {
-  app.use(express.static(dist))
+  // hashed filenames are immutable, so let the browser keep them for a year
+  app.use(
+    express.static(dist, {
+      setHeaders: (res, filePath) => {
+        if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
+        }
+      },
+    })
+  )
   app.get(/^\/(?!api\/|uploads\/).*/, (_req, res) => res.sendFile(path.join(dist, 'index.html')))
+} else {
+  console.warn('[server] no dist/ found — serving the API only. Run `npm run build` first.')
 }
 
 // Registered last: error middleware only catches what sits above it. Upload
@@ -214,7 +248,13 @@ if (!process.env.VERCEL) {
     const safely = () => void checkAndSendReminders().catch((e) => console.error('[reminders]', e))
     // daily at 9:00 AM bakery time, plus a catch-up check on startup
     cron.schedule('0 9 * * *', safely, { timezone: process.env.TIMEZONE ?? 'America/Toronto' })
-    safely()
+    /*
+     * The catch-up sweep waits a few seconds. On a free instance the CPU is
+     * tiny and shared, and this used to run at the exact moment someone was
+     * waiting for the page — querying every order and possibly sending SMS
+     * while the first request queued behind it.
+     */
+    setTimeout(safely, 5000).unref()
   })
 }
 

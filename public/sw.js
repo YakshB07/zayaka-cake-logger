@@ -115,15 +115,26 @@ self.addEventListener('fetch', (event) => {
 
   // ── API reads and uploaded photos: network-first, cache as a safety net ──
   if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/uploads/')) {
-    const keep = (res) => {
+    /*
+     * When the timer wins, the page has already been handed stale data — and
+     * on a cold start the real answer can be a minute behind. Refreshing the
+     * cache alone wasn't enough: the page kept showing yesterday's orders
+     * until someone reloaded. So tell it the moment fresh data lands.
+     */
+    const keep = (res, late) => {
       if (!res || !res.ok) return
       const copy = res.clone()
       caches.open(DATA).then((c) => c.put(request, copy))
+      if (late && url.pathname.startsWith('/api/')) {
+        self.clients.matchAll({ type: 'window' }).then((cs) => {
+          for (const c of cs) c.postMessage({ type: 'zayaka-fresh', path: url.pathname })
+        })
+      }
     }
     event.respondWith(
-      timedFetch(request, NET_TIMEOUT, keep)
+      timedFetch(request, NET_TIMEOUT, (res) => keep(res, true))
         .then((res) => {
-          keep(res)
+          keep(res, false)
           return res
         })
         .catch(() => caches.match(request).then((hit) => hit || Promise.reject(new Error('offline'))))

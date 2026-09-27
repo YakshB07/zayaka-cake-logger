@@ -103,6 +103,32 @@ export default function App() {
     void refresh()
   }, [refresh])
 
+  /*
+   * On a cold start the service worker hands the page cached orders after a
+   * few seconds and the real answer arrives much later. Without this the
+   * screen kept showing that stale copy until someone reloaded by hand.
+   */
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return
+    const onMessage = (e: MessageEvent) => {
+      if ((e.data as { type?: string })?.type === 'zayaka-fresh') void refresh()
+    }
+    navigator.serviceWorker.addEventListener('message', onMessage)
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage)
+  }, [refresh])
+
+  /*
+   * A free host stops the server when it's idle and takes the best part of a
+   * minute to start it again. A bare "Loading…" for that long reads as broken,
+   * so after a few seconds say what's actually happening.
+   */
+  const [slowStart, setSlowStart] = useState(false)
+  useEffect(() => {
+    if (!loading) return setSlowStart(false)
+    const t = window.setTimeout(() => setSlowStart(true), 3500)
+    return () => window.clearTimeout(t)
+  }, [loading])
+
   // one timer, not one per toast — a second message used to inherit the first
   // one's countdown and vanish almost immediately
   const toastTimer = useRef(0)
@@ -351,7 +377,16 @@ export default function App() {
             </div>
 
             {loading ? (
-              <p className="empty">Loading orders…</p>
+              <div className="empty">
+                <span className="spinner" aria-hidden="true" />
+                <p>{slowStart ? 'Waking the server up…' : 'Loading orders…'}</p>
+                {slowStart && (
+                  <small className="waking-note">
+                    The free host puts the app to sleep when it isn’t being used. This first load can
+                    take up to a minute — after that it’s quick.
+                  </small>
+                )}
+              </div>
             ) : loadError ? (
               <div className="empty">
                 <span className="empty-mark" aria-hidden="true">

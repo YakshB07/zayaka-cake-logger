@@ -65,8 +65,11 @@
     For everyday use (a single, faster server on http://localhost:3001):
 
     ```bash
-    npm start
+    npm run serve   # builds the app, then starts the server
     ```
+
+    `npm start` skips the build and just starts the server — that's what a host
+    should run, so a restart doesn't rebuild something it already built.
 
     > ⚠️ The reminder texts are sent by the little server this app runs — the computer (or a small host like Render/Railway) needs to be **on** at 9:00 AM for the daily reminder check to fire. It also catches up on missed reminders whenever it starts.
 
