@@ -8,8 +8,8 @@
     "dev:web": "vite",
     "dev:server": "tsx watch server/index.ts",
     "build": "vite build",
-    "start": "tsx server/index.ts",
-    "serve": "npm run build && npm start"
+    "start": "node scripts/ensure-build.mjs && tsx server/index.ts",
+    "serve": "npm run build && tsx server/index.ts"
   },
   "dependencies": {
     "express": "^4.21.2",
