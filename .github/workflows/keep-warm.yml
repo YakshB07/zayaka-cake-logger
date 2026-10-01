@@ -4,6 +4,11 @@ name: Keep the app awake
 # starting it again takes the best part of a minute — which is why opening the
 # app cold felt broken. A request every 10 minutes keeps it up.
 #
+# NOTE: GitHub throttles scheduled workflows on free repositories heavily. In
+# practice this fires roughly a handful of times a day, not every 10 minutes,
+# so it reduces cold starts but cannot eliminate them. An external pinger
+# (cron-job.org, UptimeRobot) honours a 5–10 minute schedule properly.
+#
 # The window is 6am–midnight Toronto, which is when anyone would actually open
 # it. That is ~18 hours a day, or roughly 540 of the free tier's 750 instance
 # hours a month, leaving headroom. Widen it by editing the hours below; running
@@ -27,14 +32,28 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Wake the app
+        # Passed through env rather than substituted into the script directly.
+        # Pasting the variable inline put its contents into the shell source,
+        # so the trailing newline the web form kept split the URL across two
+        # lines and curl rejected every request ("Malformed input to a URL
+        # function"). Quoting "$RENDER_URL" keeps the value out of the script
+        # text, and the trim below tolerates whatever whitespace is saved.
+        env:
+          RENDER_URL: ${{ vars.RENDER_URL }}
         run: |
-          if [ -z "${{ vars.RENDER_URL }}" ]; then
+          set -u
+          # strip CR, LF, tabs and spaces from both ends, then any trailing /
+          url="$(printf '%s' "$RENDER_URL" | tr -d '\r\n\t ' | sed 's:/*$::')"
+          if [ -z "$url" ]; then
             echo "RENDER_URL repository variable is not set — nothing to ping."
             echo "Add it under Settings → Secrets and variables → Actions → Variables."
             exit 1
           fi
+          echo "pinging $url/api/health"
           # -m 90 because a cold start can genuinely take that long; the point
           # of this request is to absorb that wait so the owner never does.
+          # No -f on purpose: any HTTP reply means the container is awake, which
+          # is the whole job. A connection failure still fails the step.
           curl -sS -m 90 -o /dev/null -w 'HTTP %{http_code} in %{time_total}s\n' \
-            "${{ vars.RENDER_URL }}/api/health" \
+            "$url/api/health" \
             --retry 3 --retry-delay 20 --retry-all-errors

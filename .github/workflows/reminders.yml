@@ -14,9 +14,30 @@ on:
 jobs:
   ping:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Trigger reminder check
+        # Both values go through env rather than into the script text. The URL
+        # used to be substituted inline, so a trailing newline saved with the
+        # repository variable split it across two lines and curl rejected it —
+        # reminders silently stopped sending for four days. Trimming here means
+        # the workflow no longer depends on the value being pasted cleanly.
+        env:
+          RENDER_URL: ${{ vars.RENDER_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          curl -sf -X POST "${{ vars.RENDER_URL }}/api/cron/reminders" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+          set -u
+          url="$(printf '%s' "$RENDER_URL" | tr -d '\r\n\t ' | sed 's:/*$::')"
+          if [ -z "$url" ]; then
+            echo "RENDER_URL repository variable is not set — cannot send reminders."
+            echo "Add it under Settings → Secrets and variables → Actions → Variables."
+            exit 1
+          fi
+          secret="$(printf '%s' "$CRON_SECRET" | tr -d '\r\n\t ')"
+          echo "posting to $url/api/cron/reminders"
+          # -f so a 4xx/5xx fails the run: a reminder that didn't send should
+          # be a red check, not a silent pass. --retry absorbs the cold start.
+          curl -sf -m 120 -o /dev/null -w 'HTTP %{http_code} in %{time_total}s\n' \
+            -X POST "$url/api/cron/reminders" \
+            -H "Authorization: Bearer $secret" \
             --retry 5 --retry-delay 10 --retry-all-errors
